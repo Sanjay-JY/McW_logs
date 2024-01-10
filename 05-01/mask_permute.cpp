@@ -43,7 +43,7 @@ int main()
     _mm256_storeu_pd(&ans[3][0],t3);
 
     for(int i=0;i<4;i++)
-    {
+    {                                                              
         __m256d row=_mm256_loadu_pd(&r1[i][0]);
         for(int j=0;j<4;j++)
         {
@@ -51,7 +51,7 @@ int main()
             double temp[4];
             sum=_mm256_set_pd(0,0,0,0);
             col=_mm256_loadu_pd(&ans[j][0]);
-            sum=_mm256_fmadd_pd(row,col,sum);
+            sum=_mm256_mul_pd(row,col);
             __m256d add = _mm256_hadd_pd(sum,_mm256_permute2f128_pd(sum,sum,1));
             add = _mm256_hadd_pd(add,add);
             _mm256_storeu_pd(&temp[0],add);
