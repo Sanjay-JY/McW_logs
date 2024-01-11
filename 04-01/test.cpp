@@ -137,7 +137,6 @@ int main()
                     block[i+r].res_matrix[j]=add;
                 } 
             }
-            std::cout<<"Block: "<<i+c<<"\n";
             for(int l=0;l<4;l++)
             {
                 __m256d row1;
@@ -181,5 +180,5 @@ int main()
 
     auto tym2 = high_resolution_clock::now();
     duration<double, std::milli> ms_double = tym2 - tym1;
-    std::cout << ms_double.count() << "ms\n";
+    std::cout << ms_double.count() << "\n";
 }

@@ -41,13 +41,13 @@ int main()
     }
     auto t2 = high_resolution_clock::now();
     duration<double, std::milli> ms_double = t2 - t1;
-    std::cout << ms_double.count() << "ms\n";
-        for(int i=0;i<16;i++)
-    {
-        for(int j=0;j<16;j++)
-        {
-            cout<<ans[i][j]<<"\t";
-        }
-        cout<<"\n";
-    }
+    std::cout << ms_double.count() << "\n";
+    //     for(int i=0;i<16;i++)
+    // {
+    //     for(int j=0;j<16;j++)
+    //     {
+    //         cout<<ans[i][j]<<"\t";
+    //     }
+    //     cout<<"\n";
+    // }
 }
