@@ -72,7 +72,7 @@ int main()
             block[k].matrix.push_back(row);
             row=_mm256_loadu_pd(&r2[i+3][j]);
             block[k].matrix.push_back(row);
-
+            
             t1=_mm256_unpacklo_pd(block[k].matrix[0],block[k].matrix[1]);       // t1 = 1 5 3 7
             t2=_mm256_unpacklo_pd(block[k].matrix[2],block[k].matrix[3]);       // t2 = 9 13 11 15
             t3=_mm256_permute2f128_pd(t2,t2,1);     // t3 = 11 15 9 13
