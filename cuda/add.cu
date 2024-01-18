@@ -6,8 +6,9 @@
 const int N = 1000000;
 
 // CUDA kernel to add two vectors
-__global__ void addVectors(int *a, int *b, int *c, int n) {
+__global__ void addVectors(int *a, int *b, int *c, int n, int *temp) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    temp[tid]=threadIdx.x;
     if (tid < n) {
         c[tid] = a[tid] + b[tid];
     }
@@ -18,16 +19,19 @@ int main() {
     std::vector<int> h_a(N, 1);
     std::vector<int> h_b(N, 2);
     std::vector<int> h_c(N);
+    std::vector<int> temp(N);
 
     // Device vectors
-    int *d_a, *d_b, *d_c;
+    int *d_a, *d_b, *d_c, *temp1;
     cudaMalloc((void **)&d_a, N * sizeof(int));
     cudaMalloc((void **)&d_b, N * sizeof(int));
     cudaMalloc((void **)&d_c, N * sizeof(int));
+    cudaMalloc((void **)&temp1, N * sizeof(int));
 
     // Copy host vectors to device
     cudaMemcpy(d_a, h_a.data(), N * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_b, h_b.data(), N * sizeof(int), cudaMemcpyHostToDevice);
+    //cudaMemcpy(temp1, temp.data(), N * sizeof(int), cudaMemcpyHostToDevice);
 
     // Set up CUDA events for timing
     cudaEvent_t start, stop;
@@ -42,7 +46,7 @@ int main() {
     cudaEventRecord(start);
 
     // Launch the CUDA kernel
-    addVectors<<<gridSize, blockSize>>>(d_a, d_b, d_c, N);
+    addVectors<<<gridSize, blockSize>>>(d_a, d_b, d_c, N, temp1);
 
     // Record the stop event
     cudaEventRecord(stop);
@@ -52,6 +56,8 @@ int main() {
 
     // Copy the result back to the host
     cudaMemcpy(h_c.data(), d_c, N * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(temp.data(), temp1, N * sizeof(int), cudaMemcpyDeviceToHost);
+    std::cout<<temp[256]<<"\n";
 
     // Calculate the elapsed time
     float milliseconds = 0;
