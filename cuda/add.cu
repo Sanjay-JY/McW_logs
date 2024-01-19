@@ -23,16 +23,16 @@ int main() {
 
     // Device vectors
     int *d_a, *d_b, *d_c, *temp1;
-    cudaMalloc((void **)&d_a, N * sizeof(int));
-    cudaMalloc((void **)&d_b, N * sizeof(int));
-    cudaMalloc((void **)&d_c, N * sizeof(int));
-    cudaMalloc((void **)&temp1, N * sizeof(int));
+    cudaMalloc(&d_a, N * sizeof(int));
+    cudaMalloc(&d_b, N * sizeof(int));
+    cudaMalloc(&d_c, N * sizeof(int));
+    cudaMalloc(&temp1, N * sizeof(int));
 
     // Copy host vectors to device
     cudaMemcpy(d_a, h_a.data(), N * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_b, h_b.data(), N * sizeof(int), cudaMemcpyHostToDevice);
     //cudaMemcpy(temp1, temp.data(), N * sizeof(int), cudaMemcpyHostToDevice);
-
+    std::cout<<" Size: "<<sizeof(d_a)<<" N: "<<sizeof(h_a)<<"\n";
     // Set up CUDA events for timing
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
@@ -57,7 +57,7 @@ int main() {
     // Copy the result back to the host
     cudaMemcpy(h_c.data(), d_c, N * sizeof(int), cudaMemcpyDeviceToHost);
     cudaMemcpy(temp.data(), temp1, N * sizeof(int), cudaMemcpyDeviceToHost);
-    std::cout<<temp[256]<<"\n";
+    std::cout<<temp[1]<<"\n";
 
     // Calculate the elapsed time
     float milliseconds = 0;

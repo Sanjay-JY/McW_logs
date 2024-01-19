@@ -30,25 +30,15 @@ struct Pixel {
 
 #pragma pack(pop)
 
-__global__ void invertImage(Pixel* pixels,int size,int* temp) {
+__global__ void invertImage(Pixel* pixels,int size) {
     int id=blockDim.x*blockIdx.x+threadIdx.x;
-    temp[id]=threadIdx.x;
     if(id<size){
-        // temp[id]=static_cast<int>(pixels[id].blue);
         pixels[id].red = 255 - pixels[id].red;
         pixels[id].green = 255 - pixels[id].green;
         pixels[id].blue = 255 - pixels[id].blue;
     }
-    //__syncthreads();
 }
 
-// void invertImage(std::vector<Pixel>& pixels) {
-//     for (auto& pixel : pixels) {
-//         pixel.red = 255 - pixel.red;
-//         pixel.green = 255 - pixel.green;
-//         pixel.blue = 255 - pixel.blue;
-//     }
-// }
 
 int main() {
     std::ifstream file("input.bmp", std::ios::in | std::ios::binary);
@@ -71,57 +61,46 @@ int main() {
     }
 
     std::vector<Pixel> pixels(header.width * header.height);
-    const int padding = 4 - ((header.width * 3) % 4); // Calculate padding
+    const int padding = 4 - ((header.width * 3) % 4); 
     file.seekg(header.data_offset);
     for (int y = header.height - 1; y >= 0; --y) {
         file.read(reinterpret_cast<char*>(&pixels[y * header.width]), header.width * sizeof(Pixel));
-        file.seekg(padding, std::ios::cur); // Skip padding bytes
+        file.seekg(padding, std::ios::cur);
     }
     file.close();
 
-    int* temp;
     std::cout<<"Width: "<<header.width<<"\n";
     std::cout<<"Height: "<<header.height<<"\n";
     std::cout<<"Length of pixels: "<<pixels.size()<<"\n";
-    std::vector<Pixel> d_pixels(header.width * header.height);
-    Pixel* ans_pixels;
-    int N=header.width*header.height;
-    std::vector<int> temp1(N);
-    std::cout<<"Before: "<<static_cast<int>(pixels[0].blue)<<"\n";
-    std::cout<<"Before: "<<static_cast<int>(d_pixels[0].blue)<<"\n";
-
-    cudaMalloc(reinterpret_cast<void**>(&ans_pixels),N);
-    cudaMalloc(reinterpret_cast<void**>(&temp), N * sizeof(int));
-
-    cudaMemcpy(ans_pixels, pixels.data(),N,cudaMemcpyHostToDevice);
     
+    std::vector<Pixel> ans_pixels(header.width * header.height);
+    Pixel* d_pixels;
+    int N=header.width*header.height*sizeof(Pixel);
+
+    cudaMalloc(&d_pixels, N );
+    cudaMemcpy(d_pixels, pixels.data(),N,cudaMemcpyHostToDevice);
+
     int thr_per_blk = 256;
-	int blk_in_grid = ceil(float(N) / thr_per_blk);
+	int blk_in_grid = ceil(float(header.width*header.height) / thr_per_blk);   //used N instead of header.width*header.height which lead to illegal memory access
 
-    invertImage<<<blk_in_grid, thr_per_blk>>>(ans_pixels, N, temp);
+    invertImage<<<blk_in_grid, thr_per_blk>>>(d_pixels, N);
 
-    //cudaDeviceSynchronize();
     cudaError_t cudaError = cudaGetLastError();
     if (cudaError != cudaSuccess) {
         std::cerr << "Kernel launch failed: " << cudaGetErrorString(cudaError) << std::endl;
-        // Additional error handling if needed
     }
-    cudaMemcpy(d_pixels.data(), ans_pixels, N , cudaMemcpyDeviceToHost);
-    cudaMemcpy(temp1.data(), temp, N , cudaMemcpyDeviceToHost);
-
-    std::cout<<"After: "<<static_cast<int>(pixels[0].blue)<<"\n";
-    std::cout<<"After: "<<temp1[1]<<"\n";
+    cudaMemcpy(ans_pixels.data(), d_pixels, N , cudaMemcpyDeviceToHost);
 
     std::ofstream output_file("output_inverted.bmp", std::ios::out | std::ios::binary);
     if (!output_file.is_open()) {
         std::cerr << "Error creating output file!" << std::endl;
         return 1;
     }
-
+    
     output_file.write(reinterpret_cast<char*>(&header), sizeof(BMPHeader));
     for (int y = header.height - 1; y >= 0; --y) {
-        output_file.write(reinterpret_cast<char*>(&d_pixels[y * header.width]), header.width * sizeof(Pixel));
-        output_file.seekp(padding, std::ios::cur); // Add padding bytes
+        output_file.write(reinterpret_cast<char*>(&ans_pixels[y*header.width]), header.width * sizeof(Pixel));
+        output_file.seekp(padding, std::ios::cur); 
     }
     output_file.close();
 
