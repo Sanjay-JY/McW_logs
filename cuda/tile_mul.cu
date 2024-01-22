@@ -9,7 +9,7 @@
 const int N = 64;
 const int SIZE = 64;
 
-__global__ void matrixMul(const int *a, const int *b, int *c) {
+__global__ void tileMultiply(const int *a, const int *b, int *c) {
 
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -32,6 +32,22 @@ __global__ void matrixMul(const int *a, const int *b, int *c) {
   }
   c[row * N + col] = tmp;
 }
+
+__global__ void multiply(int *a, int *b,int *c)
+{
+    int Row = blockIdx.y*blockDim.y+threadIdx.y;
+    int Col = blockIdx.x*blockDim.x+threadIdx.x;
+	if((Row<N)&&(Col<N))
+    {
+        double sum=0;
+        for(int i=0;i<N;i++)
+        {
+            sum=sum+a[Row*N+i]*b[Col+i*N];
+        }
+        b[Row*N+Col]=sum;     
+    }
+}
+
 
 void verify_result(std::vector<int> &a, std::vector<int> &b, std::vector<int> &c) {
   using std::chrono::high_resolution_clock;
@@ -82,8 +98,9 @@ int main() {
   dim3 threads(THREADS, THREADS);
   dim3 blocks(BLOCKS, BLOCKS);
 
-  matrixMul<<<blocks, threads>>>(d_a, d_b, d_c);
+  tileMultiply<<<blocks, threads>>>(d_a, d_b, d_c);
   cudaMemcpy(h_c.data(), d_c, bytes, cudaMemcpyDeviceToHost);
+
   cudaEventRecord(stop);
   cudaEventSynchronize(stop);
 
@@ -93,6 +110,21 @@ int main() {
 
   verify_result(h_a, h_b, h_c);
   std::cout << "COMPLETED SUCCESSFULLY\n";
+
+  cudaEventRecord(start);
+
+  multiply<<<blocks, threads>>>(d_a, d_b, d_c);
+  cudaMemcpy(h_c.data(), d_c, bytes, cudaMemcpyDeviceToHost);
+
+  cudaEventRecord(stop);
+  cudaEventSynchronize(stop);
+
+  milliseconds = 0;
+  cudaEventElapsedTime(&milliseconds, start, stop);
+  std::cout << "Tiled GPU : "<<milliseconds << "\n";
+
+  verify_result(h_a, h_b, h_c);
+  std::cout << "TILED COMPLETED SUCCESSFULLY\n";
   cudaFree(d_a);
   cudaFree(d_b);
   cudaFree(d_c);
