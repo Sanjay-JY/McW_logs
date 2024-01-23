@@ -97,7 +97,7 @@ __global__ void temp(Pixel *x, int width, int height) {
 }
 
 int main() {
-    const char* filename = "input.bmp";
+    const char* filename = "input1.bmp";
     Bitmap bitmap;
 
     readBitmap(filename, bitmap);
