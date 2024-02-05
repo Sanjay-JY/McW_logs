@@ -456,7 +456,7 @@ int test_cyclid_corr_accum2() {
 }
 int main() {
     printf("cyclid_gpu\n");
-    //test_cyclid_corr_accum1();
-    test_cyclid_corr_accum2();
+    test_cyclid_corr_accum1();
+    //test_cyclid_corr_accum2();
 }
 
