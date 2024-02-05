@@ -1,0 +1,43 @@
+in = (0.50,0.50)(1.50,1.00)(2.50,1.50)(3.50,2.00)(4.50,2.50)(5.50,3.00)(6.50,3.50)(7.50,4.00)(8.50,4.50)(9.50,5.00)(10.50,5.50)(11.50,6.00)(12.50,6.50)(13.50,7.00)(14.50,7.50)(15.50,8.00)
+
+iny = (0.50,0.50)(1.50,1.00)(2.50,1.50)(3.50,2.00)(4.50,2.50)(5.50,3.00)(6.50,3.50)(7.50,4.00)(8.50,4.50)(9.50,5.00)(10.50,5.50)(11.50,6.00)(12.50,6.50)(13.50,7.00)(14.50,7.50)(15.50,8.00)
+
+profilesize=12              
+exp[12]
+phasebins[33]              
+insize2=12
+
+
+0	1	2	3	4	5	6	7	8	9	10	11
+.5,-0
+0
+in1 0.50,0.50
+	0
+	in2 0.50,0.50
+	phaseinx=0
+	phasebin=0
+	expidx=0
+	1
+	in2 1.50,1.00
+	phaseinx=1
+	phasebin=0
+	expidx=1
+
+
+
+IOT Module:
+	Description:
+		Upload data from the IOT devices to the firebase realtime database module.
+
+Firebase Realtime Database Module:
+    Description:
+        This module is responsible for establishing a connection with the Firebase Realtime Database to fetch real-time sensor data.
+
+Data Processing Module:
+    Description:
+        Process the raw sensor data received from the Firebase Realtime Database.
+
+AR Visualization Module:
+    Description:
+        Develop the AR visualization component using Unity's AR Foundation or other AR frameworks. Create overlays to represent vital signs and other relevant patient data.
+Integrate AR markers or geolocation-based features for placing virtual objects in the real-world environment.

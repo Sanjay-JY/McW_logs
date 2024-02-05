@@ -1,0 +1,33 @@
+cyclid_corr_accum_all_pols<<<grids,threads>>>(in_gpu, iny_gpu, inSize, inSize2, out_gpu, outyy_gpu, outxy_gpu, outyx_gpu, phaseBins_gpu, nPhaseBins, nchan, nlag, iblock, ichan, profileSize, phaseBinLookupSize, false);
+
+cyclid_corr_accum_all_pols(float2 *in1, float2* in2, size_t size1, size_t size2, float2* outXX, float2* outYY, float2 *outXY, float2 *outYX, unsigned *phaseBins, int numPhaseBins, int numPfbChans, int nlag , int iblock, int pfbChan, size_t outSz, int lookupBlockLen, bool verbose)
+
+in_gpu = float2* = 256250 (256250*8=2050000)
+iny_gpu = float2* = 256250 (256250*8=2050000)
+inSize = size_t (not used) = 256250
+inSize2 = size_t = 256184
+out_gpu = float2* = 16640 (16640*8=133120)
+outyy_gpu = float2* = 16640 (16640*8=133120)
+outxy_gpu = float2* = 16640 (16640*8=133120)...
+outyx_gpu = float2* = 16640 (16640*8=133120)
+phaseBins_gpu = unsigned * = 512563 (512563*4=2050252)
+nPhaseBins = int (not used) = 256
+nchan = int = 1
+nlag = int = 65
+iblock = int = 0
+ichan = int = 0
+profileSize = int (output size) = 16640
+phaseBinLookupSize = int = 512563
+verbose = bool (not used) 
+
+
+in = (0.50,0.50)(1.50,1.00)(2.50,1.50)(3.50,2.00)(4.50,2.50)(5.50,3.00)(6.50,3.50)(7.50,4.00)(8.50,4.50)(9.50,5.00)(10.50,5.50)(11.50,6.00)(12.50,6.50)(13.50,7.00)(14.50,7.50)(15.50,8.00)
+
+iny = (0.50,0.50)(1.50,1.00)(2.50,1.50)(3.50,2.00)(4.50,2.50)(5.50,3.00)(6.50,3.50)(7.50,4.00)(8.50,4.50)(9.50,5.00)(10.50,5.50)(11.50,6.00)(12.50,6.50)(13.50,7.00)(14.50,7.50)(15.50,8.00)
+
+
+Total amount of shared memory per block:       49152 bytes
+Total shared memory per multiprocessor:        102400 bytes
+
+
+
