@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Specify the output file
-output_file="shared_results.txt"
+output_file="accum1_lookup_allflags.txt"
 
 > "$output_file"  # Clear the output file
 
@@ -15,6 +15,6 @@ for i in {1..100}; do
 done
 
 # Calculate averages after all results are written
-awk '{ sum1 += $1; count++ } END { print "Average:", sum1/count}' "$output_file" >> "$output_file"
+awk '{ sum1 += $1; count++ } END { print "Average:", sum1/count,"ms"}' "$output_file" >> "$output_file"
 
 echo "Results stored in $output_file"

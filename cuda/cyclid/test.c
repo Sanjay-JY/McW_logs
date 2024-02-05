@@ -45,6 +45,7 @@ int main()
     // init phase bins: not many phase bins, all samples use 0 but a few 
     cs.numPhaseBins = 256;
     int phaseBinLookupSize = (2*cs.numTimeSamplesHfft) + cs.nlag - 2;
+    printf("phaselookup->%d\n",phaseBinLookupSize);
     unsigned *phaseBins;
     phaseBins = (unsigned *)malloc(phaseBinLookupSize *sizeof(unsigned));
     memset(phaseBins, 0, phaseBinLookupSize*sizeof(int));
@@ -158,7 +159,7 @@ int main()
             //printf("binIdx->%d\n",phaseBinIdx);
             phaseBin = phaseBins[phaseBinIdx];
             expIdx = (phaseBin * nlag * nchan) + (nlag * ichan) + ilag; 
-            printf("exp->%d\n",expIdx);
+            //printf("exp->%d\n",expIdx);
             if (verbose) {
                 printf(" pb=%d ",phaseBin);
                 printf(" pi=%d ",phaseBinIdx);
@@ -174,11 +175,11 @@ int main()
             }
             else
             {
-                if(expIdx==16444)
-                {
-                    //fprintf(filePointer, "exp->%d\tlast->%d\tcidx->%d\tsize->%d\n",expIdx,(lookuptable[expIdx*1003].x),expIdx*1003 +(lookuptable[expIdx*1003].x),16440*1003* sizeof(int2));
-                    printf("exp->%d\tlast->%d\tcidx->%d\tsize->%d\n",expIdx,(lookuptable[expIdx*1003].x),expIdx*1003 +(lookuptable[expIdx*1003].x),16640*1003* sizeof(struct int2));
-                }
+                // if(expIdx==16444)
+                // {
+                //     //fprintf(filePointer, "exp->%d\tlast->%d\tcidx->%d\tsize->%d\n",expIdx,(lookuptable[expIdx*1003].x),expIdx*1003 +(lookuptable[expIdx*1003].x),16440*1003* sizeof(int2));
+                //     printf("exp->%d\tlast->%d\tcidx->%d\tsize->%d\n",expIdx,(lookuptable[expIdx*1003].x),expIdx*1003 +(lookuptable[expIdx*1003].x),16640*1003* sizeof(struct int2));
+                // }
                 lookuptable[expIdx*1003 +(lookuptable[expIdx*1003].x)].x=i;
                 lookuptable[expIdx*1003 + (lookuptable[expIdx*1003].x)].y=i+ilag;
                 lookuptable[expIdx*1003].x= (lookuptable[expIdx*1003].x)+1;

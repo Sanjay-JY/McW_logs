@@ -315,7 +315,7 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
     }
 
     // FINALLY, actually call the kernel!
-    //cyclid_corr_accum_nlag_fast<<<grids, threads>>>(in_gpu, in_gpu, inSize,  inSize2, out_gpu, nlag, phaseBins_gpu, ichan, nchan, iblock, nPhaseBins, v);
+    //cyclid_corr_accum_nlag_fast<<<grids, threads>>>(in_gpu, in_gpu, inSize,  inSize2, out_gpu, nlag, phaseBins_gpu, ichan, nchan, iblock, nPhaseBins, verbose);
     cyclid_corr_accum_all_pols<<<grids,threads>>>(in_gpu, iny_gpu, inSize, inSize2, out_gpu, outyy_gpu, outxy_gpu, outyx_gpu, phaseBins_gpu, nPhaseBins, nchan, nlag, iblock, ichan, profileSize, phaseBinLookupSize, false);
 
     //CHECK_CUDA("ran gpu kernel\n");
@@ -324,7 +324,7 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
         checkCuda( cudaEventRecord(stopEvent, 0) );
         checkCuda( cudaEventSynchronize(stopEvent) );
         checkCuda( cudaEventElapsedTime(&ms, startEvent, stopEvent) ); 
-        printf("test_corr_accum: %f ms\n", ms);
+        printf("%f\n", ms);
     }
 
     //CHECK_CUDA("ran gpu kernel timing\n");
@@ -456,7 +456,7 @@ int test_cyclid_corr_accum2() {
 }
 int main() {
     printf("cyclid_gpu\n");
-    test_cyclid_corr_accum1();
-    //test_cyclid_corr_accum2();
+    //test_cyclid_corr_accum1();
+    test_cyclid_corr_accum2();
 }
 
