@@ -36,14 +36,21 @@ cudaError_t checkCuda(cudaError_t result)
 }
 
 __global__ void lookuptable_kernel(float2 *in1, float2 *in2, int2 *d_lookup, float2 *d_result) {
-    int rowIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    int rowIdx = (blockIdx.x * blockDim.x + threadIdx.x)/(1003/256);
+    int threadrow = (blockIdx.x * blockDim.x + threadIdx.x);
     // Check if the thread index is within the valid range (less than or equal to 16640)
     if (rowIdx < 16640) {
         float2 sum;
         sum.x = 0.0f;
         sum.y = 0.0f;
-        for (int colIdx = 1; colIdx < 1003; colIdx++) {
-            int2 current = d_lookup[rowIdx * 1003 + colIdx];
+
+        int start=(threadrow*256)+1;
+        int end=start+256+1;
+
+        if(end>=1003) end=1003;
+
+        for (int colIdx = 1; colIdx < 256; colIdx++) {
+            int2 current = d_lookup[threadrow * 256 + colIdx];
                 if(current.x==-1) break;
             float2 product;
             product.x = in1[current.y].x * in2[current.x].x - in1[current.y].y *-1.0* in2[current.x].y;
@@ -54,8 +61,10 @@ __global__ void lookuptable_kernel(float2 *in1, float2 *in2, int2 *d_lookup, flo
             sum.y += product.y;
             //printf("%d\t%d\t%d\n",threadIdx.x,current.x,current.y);
         }
-        d_result[rowIdx].x = sum.x;
-        d_result[rowIdx].y = sum.y;
+        atomicAdd(&d_result[rowIdx].x, sum.x);
+        atomicAdd(&d_result[rowIdx].y, sum.y);
+        // d_result[rowIdx].x = sum.x;
+        // d_result[rowIdx].y = sum.y;
     }
 }
 
@@ -185,8 +194,8 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
     cudaMalloc((float2 **)&iny_gpu, inSize*sizeof(float2));
     cudaMemcpy(in_gpu, in, inSize*sizeof(float2), cudaMemcpyHostToDevice);
     cudaMemcpy(iny_gpu, iny, inSize*sizeof(float2), cudaMemcpyHostToDevice);
-    int NUM_THREADS =1024;
-    int NUM_BLOCKS = (16640+ NUM_THREADS-1) / NUM_THREADS;
+    int NUM_THREADS =256;
+    int NUM_BLOCKS = (16640*3) / NUM_THREADS;
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
@@ -218,8 +227,8 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
     // }
     for(int i=0;i<16640;i++)
     {
-        // printf("%d\t",i);
-        // printf("%f\n",result[i].x);
+        printf("i->%d\t",i);
+        printf("exp->%f res->%f\n",exp[i].x,result[i].x);
         // printf()
         assert(exp[i].x==result[i].x);
         assert(exp[i].y==result[i].y);

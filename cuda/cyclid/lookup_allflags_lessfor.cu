@@ -241,6 +241,7 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
     cudaMalloc((void**)&d_yyresult, 16640* sizeof(float2));
     cudaMalloc((void**)&d_xyresult, 16640* sizeof(float2));
     cudaMalloc((void**)&d_yxresult, 16640* sizeof(float2));
+    
     cudaMemcpy(d_lookup,lookuptable, 16640*1003 * sizeof(int2), cudaMemcpyHostToDevice);
     cudaMemcpy(d_xxresult,resultxx, 16640* sizeof(float2), cudaMemcpyHostToDevice);
     cudaMemcpy(d_yyresult,resultyy, 16640* sizeof(float2), cudaMemcpyHostToDevice);
