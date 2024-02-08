@@ -55,14 +55,14 @@ __global__ void lookuptable_kernel(float2 *in1, float2 *in2, int2 *d_lookup, flo
         float2 sumxx,sumyy,sumxy,sumyx;
         float sumx=0;
         float sumy=0;
-        sumxx.x = 0.0f;
-        sumxx.y = 0.0f;
-        sumyy.x = 0.0f;
-        sumyy.y = 0.0f;
-        sumxy.x = 0.0f;
-        sumxy.y = 0.0f;
-        sumyx.x = 0.0f;
-        sumyx.y = 0.0f;
+        sumxx.x = 0.000000;
+        sumxx.y = 0.000000;
+        sumyy.x = 0;
+        sumyy.y = 0;
+        sumxy.x = 0;
+        sumxy.y = 0;
+        sumyx.x = 0;
+        sumyx.y = 0;
 
         int start=(threadrow*LOOP_SIZE)+1;
         int end=start+LOOP_SIZE-1;
@@ -99,29 +99,33 @@ __global__ void lookuptable_kernel(float2 *in1, float2 *in2, int2 *d_lookup, flo
             product.y = (in1[current.y].x * -1.0*in1[current.x].y) + (in1[current.y].y * in1[current.x].x);
             product.y = -1.0*product.y;
             sumxx.x += product.x;      //if I write this product.x to an individual array and add it later in the CPU, the anwser is correct
-            temp[colIdx].x=product.x;
+            // if(blockIdx.x==0&&rowIdx==0&&start==513)
+            // {
+            //     printf("%f\n",product.x);
+            // }
+            //temp[colIdx].x=product.x;
             sumxx.y += product.y;
-            if(rowIdx==0)
-            {
-                d_yytemp[colIdx].x=product.x;
-            }
+            // if(rowIdx==0)
+            // {
+            //     d_yytemp[colIdx].x=product.x;
+            // }
             
         }
 
-        if(rowIdx==0)
-        {
-            //printf("sumxx.x->%f\n",sumxx.x);
-            d_yytemp[threadrow].y=sumxx.x;
-            //d_yytemp[threadrow].y=sumxx.y;
-        }
+        // if(rowIdx==0)
+        // {
+        //     //printf("sumxx.x->%f\n",sumxx.x);
+        //     d_yytemp[threadrow].y=sumxx.x;
+        //     //d_yytemp[threadrow].y=sumxx.y;
+        // }
 
         __syncthreads();
 
         memxx[threadIdx.x][threadIdx.y].x=sumxx.x;     //if I write this accumulated product i.e.sumxx.x to an individual array and add it later in the CPU, the anwser is incorrect
-        if(rowIdx==0)
-        {
-            printf("sum %d->%f\n",threadIdx.y,sumx);
-        }
+        // if(rowIdx==0)
+        // {
+        //     printf("sum %d->%f\n",threadIdx.y,sumx);
+        // }
         memxx[threadIdx.x][threadIdx.y].y=sumxx.y;
         
         __syncthreads();
@@ -142,16 +146,16 @@ __global__ void lookuptable_kernel(float2 *in1, float2 *in2, int2 *d_lookup, flo
 
         }
 
-        __syncthreads();
-        if(rowIdx==0&&threadIdx.y==0)
-        {
-            float tsum=0;
-            for(int i=1;i<1003;i++)
-            {
-                tsum+=temp[i].x;
-            }
-            printf("Final Sum: %f\n",tsum);
-        }
+        // __syncthreads();
+        // if(rowIdx==0&&threadIdx.y==0)
+        // {
+        //     float tsum=0;
+        //     for(int i=1;i<1003;i++)
+        //     {
+        //         tsum+=temp[i].x;
+        //     }
+        //     printf("Final Sum: %f\n",tsum);
+        // }
     
     }
 }
@@ -187,8 +191,8 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
     int maxValue = 127; //255 causes overflow problems?;
     int value = 0;
 
-    float fvalue = 0.5;
-    float imgDiv = 2.0;
+    float fvalue = 1.0;
+    float imgDiv = 1.0;
     for (int i = 0; i<inSize; i++) {
         in[i].x = ((float)value) + fvalue;
         in[i].y = ( (float)((float)value)/imgDiv) + fvalue;
@@ -207,6 +211,7 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
     exp = (float2 *)malloc(profileSize * sizeof(float2));
     memset(exp, 0, profileSize*sizeof(float2));
 
+    printf("Exp: \n");
     //Reference Code
     for (int i = 0; i<inSize2; i++) {
         in1 = in[i];
@@ -217,11 +222,14 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
             phaseBin = phaseBins[phaseBinIdx];
             expIdx = (phaseBin * nlag * nchan) + (nlag * ichan) + ilag;
             exp[expIdx].x += tmp.x;
+            if(expIdx==0)
+                printf("%f\n",tmp.x);
             exp[expIdx].y += tmp.y;
         }
     }
 
     //Lookup Table Creation
+    clock_t start_time = clock();
     int2 *lookuptable;
     lookuptable= (int2 *)malloc(16640*1003* sizeof(int2));
     fflush(stdout);
@@ -230,7 +238,7 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
         lookuptable[c].x=-1;
     }
 
-    clock_t start_time = clock();
+    
     for (int i = 0; i<inSize2; i++) {
         for (int ilag=0; ilag<nlag; ilag++) {
             phaseBinIdx = (2*i)+ilag;
@@ -254,6 +262,11 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
     }
     
     
+    clock_t end_time = clock();
+    double elapsed_time = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
+    printf("Elapsed time: %.6f seconds\n", elapsed_time);
+
+
     int2 *d_lookup;
     float2 *d_xxresult,*d_yyresult,*d_xyresult,*d_yxresult,*resultxx,*resultyy,*resultxy,*resultyx;
     float2 *tempxx,*tempyy,*tempxy,*tempyx,*d_xxtemp,*d_yytemp,*d_xytemp,*d_yxtemp;
@@ -331,6 +344,7 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
     // Record start event
     cudaEventRecord(start);
 
+    printf("Res: \n");
     lookuptable_kernel<<<NUM_BLOCKS, NUM_THREADS>>>(in_gpu,iny_gpu,d_lookup, d_xxresult,d_yyresult,d_xyresult,d_yxresult,d_xxtemp,d_yytemp,d_xytemp,d_yxtemp);
 
     cudaEventRecord(stop);
@@ -362,9 +376,6 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
     cudaMemcpy(tempyy, d_yytemp, temp_size* sizeof(float2), cudaMemcpyDeviceToHost);
     cudaMemcpy(tempxy, d_xytemp, temp_size* sizeof(float2), cudaMemcpyDeviceToHost);
 
-    clock_t end_time = clock();
-    double elapsed_time = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
-    printf("Elapsed time: %.6f seconds\n", elapsed_time);
     
     cudaFree(d_lookup);
     cudaFree(d_xxresult);
@@ -393,14 +404,14 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
     printf("Individualsum->%f\n",sum);
 
 
-    for(int i=16639;i<16640;i++)
+    for(int i=0;i<16640;i++)
     {
-        printf("i->%d\n",i);
+        //printf("i->%d\n",i);
 
-        printf("EXP: %f\t RES: %f\n",exp[i].x,resultxx[i].x);
+        //printf("EXP: %f\t RES: %f\n",exp[i].x,resultxx[i].x);
         assert(exp[i].x==resultxx[i].x);
 
-        printf("EXP: %f\t RES: %f\n",exp[i].y,resultxx[i].y);
+        //printf("EXP: %f\t RES: %f\n",exp[i].y,resultxx[i].y);
         assert(exp[i].y==resultxx[i].y);
 
         // printf("EXP: %f\t RES: %f\n",exp[i].x,resultyy[i].x);
