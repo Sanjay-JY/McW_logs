@@ -222,8 +222,8 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
             phaseBin = phaseBins[phaseBinIdx];
             expIdx = (phaseBin * nlag * nchan) + (nlag * ichan) + ilag;
             exp[expIdx].x += tmp.x;
-            if(expIdx==0)
-                printf("%f\n",tmp.x);
+            // if(expIdx==0)
+            //     printf("%f\n",tmp.x);
             exp[expIdx].y += tmp.y;
         }
     }
@@ -408,7 +408,7 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
     {
         //printf("i->%d\n",i);
 
-        //printf("EXP: %f\t RES: %f\n",exp[i].x,resultxx[i].x);
+        printf("EXP: %f\t RES: %f\n",exp[i].x,resultxx[i].x);
         assert(exp[i].x==resultxx[i].x);
 
         //printf("EXP: %f\t RES: %f\n",exp[i].y,resultxx[i].y);

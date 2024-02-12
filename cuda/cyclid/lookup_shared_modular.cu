@@ -227,7 +227,7 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
 
     int phaseBinIdx, phaseBin, expIdx;
 
-    clock_t start_time = clock();
+    
     int2 *lookuptable;
     lookuptable= (int2 *)malloc(16640*1003* sizeof(int2));
     fflush(stdout);
@@ -236,6 +236,7 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
         lookuptable[c].x=-1;
     }
 
+    clock_t start_time = clock();
     
     for (int i = 0; i<inSize2; i++) {
         for (int ilag=0; ilag<nlag; ilag++) {
@@ -262,7 +263,7 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
     
     clock_t end_time = clock();
     double elapsed_time = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
-    printf("CPU time: %.6f seconds\n", elapsed_time*1000);
+    printf("CPU time: %.6f ms\n", elapsed_time*1000);
 
 
     int2 *d_lookup;

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Specify the output file
-output_file="accum1_lookup_allflags.txt"
+output_file="modthreads_alllags.txt"
 
 > "$output_file"  # Clear the output file
 
