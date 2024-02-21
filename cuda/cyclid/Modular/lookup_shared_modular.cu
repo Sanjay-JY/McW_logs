@@ -1,3 +1,17 @@
+/************************************************************************************
+A modified code which computes lookuptable in the CPU and threads are launched in 2D
+configuration where threadIdx.x are mapped to index in the output array and threads 
+in y dimensions iterate a small portion of the 'for' loop and write its result in the 
+shared memory. Zeroth thread in the x dimension add those values in the shared memory 
+and writes it result in the output array. It uses modified input similar to real-world 
+data where whole numbers are used and computes all polarisations.
+
+Link: https://bitbucket.org/assessmentmcw/cyclid/src/master/lookup_shared_modular.cu
+
+GPU Time: 14.5719 ms
+CPU Time: 140.05 ms
+***************************************************************************************/
+
 #include <stdio.h>
 #include <complex>
 #include <assert.h>
@@ -36,7 +50,7 @@ __global__ void lookuptable_kernel(float2 *in1, float2 *in2, int2 *d_lookup, flo
     
     int rowIdx = blockIdx.x * blockDim.x + threadIdx.x;
     int threadrow = threadIdx.y;
-    
+    if(rowIdx==1) printf("%d\n",d_lookup[rowIdx].x);
     __shared__ float2 memxx[BLOCK_SIZE][4];
     __shared__ float2 memyy[BLOCK_SIZE][4];
     __shared__ float2 memxy[BLOCK_SIZE][4];
@@ -81,29 +95,25 @@ __global__ void lookuptable_kernel(float2 *in1, float2 *in2, int2 *d_lookup, flo
             float2 product;
 
             //XX Corelation
-            product.x = (in1y_x * in1x_x) - (in1y_y *-1.0* in1x_y);
-            product.y = (in1y_x * -1.0*in1x_y) + (in1y_y * in1x_x);
-            product.y = -1.0*product.y;
+            product.x = (in1y_x * in1x_x) + (in1y_y * in1x_y);
+            product.y = (in1y_y * in1x_x)-(in1y_x *in1x_y);
             sumxx.x += product.x;      
-            sumxx.y += product.y;
+            sumxx.y -= product.y;
 
-            product.x = (in2y_x * in2x_x) - (in2y_y *-1.0* in2x_y);
-            product.y = (in2y_x * -1.0*in2x_y) + (in2y_y * in2x_x);
-            product.y = -1.0*product.y;
+            product.x = (in2y_x * in2x_x) + (in2y_y * in2x_y);
+            product.y = (in2y_y * in2x_x)-(in2y_x *in2x_y);
             sumyy.x += product.x;      
-            sumyy.y += product.y;
+            sumyy.y -= product.y;
 
-            product.x = (in1y_x * in2x_x) - (in1y_y *-1.0* in2x_y);
-            product.y = (in1y_x * -1.0*in2x_y) + (in1y_y * in2x_x);
-            product.y = -1.0*product.y;
+            product.x = (in1y_x * in2x_x) + (in1y_y * in2x_y);
+            product.y = (in1y_y * in2x_x)-(in1y_x*in2x_y);
             sumxy.x += product.x;      
-            sumxy.y += product.y;
+            sumxy.y -= product.y;
 
-            product.x = (in2y_x * in1x_x) - (in2y_y *-1.0* in1x_y);
-            product.y = (in2y_x * -1.0*in1x_y) + (in2y_y * in1x_x);
-            product.y = -1.0*product.y;
+            product.x = (in2y_x * in1x_x) + (in2y_y * in1x_y);
+            product.y = (in2y_y * in1x_x)-(in2y_x *in1x_y);
             sumyx.x += product.x;      
-            sumyx.y += product.y;
+            sumyx.y -= product.y;
             
         }
 
@@ -227,11 +237,7 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
 
     int phaseBinIdx, phaseBin, expIdx;
 
-<<<<<<< HEAD
     clock_t start_time = clock();
-=======
-    
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
     int2 *lookuptable;
     lookuptable= (int2 *)malloc(16640*1003* sizeof(int2));
     fflush(stdout);
@@ -239,12 +245,10 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
     {
         lookuptable[c].x=-1;
     }
-
-<<<<<<< HEAD
-=======
-    clock_t start_time = clock();
-    
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
+//     for(int i=0;i<1000;i++)
+//   {
+//     printf("%f\t%f\n",lookuptable[i].x,lookuptable[i].y);
+//   }
     for (int i = 0; i<inSize2; i++) {
         for (int ilag=0; ilag<nlag; ilag++) {
             phaseBinIdx = (2*i)+ilag;
@@ -270,7 +274,7 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
     
     clock_t end_time = clock();
     double elapsed_time = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
-    printf("CPU time: %.6f ms\n", elapsed_time*1000);
+    //printf("%.6f\n", elapsed_time*1000);
 
 
     int2 *d_lookup;
@@ -330,7 +334,7 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
         checkCuda( cudaEventRecord(stopEvent, 0) );
         checkCuda( cudaEventSynchronize(stopEvent) );
         checkCuda( cudaEventElapsedTime(&ms, startEvent, stopEvent) ); 
-        printf("GPU Time: %f ms\n", ms);
+        printf("%f\n", ms);
     }
 
     cudaError_t cudaStatus = cudaGetLastError();
@@ -338,10 +342,7 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
         fprintf(stderr, "Kernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
         return 1;
     }
-<<<<<<< HEAD
 
-=======
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
     cudaDeviceSynchronize();
 
     cudaMemcpy(resultxx, d_xxresult, 16640 * sizeof(float2), cudaMemcpyDeviceToHost);
@@ -379,8 +380,9 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
             }
         }
 
-<<<<<<< HEAD
         int expIdx;
+        float max_diffx=0;
+        float max_diffy=0;
         if (verbose)
             printf("\nresults:\n");
         for (int iphase=0; iphase<nPhaseBins; iphase++) {
@@ -394,7 +396,15 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
                     if (verbose)
                         printf(" %f+%fi ", resultxx[expIdx].x, resultxx[expIdx].y);
                     float diffx = abs(resultxx[expIdx].x - exp[expIdx].x);    
-                    float diffy = abs(resultxx[expIdx].y - exp[expIdx].y);    
+                    float diffy = abs(resultxx[expIdx].y - exp[expIdx].y);   
+                    if(diffx>max_diffx)
+                    {
+                        max_diffx=diffx;
+                    }
+                    if(diffy>max_diffy)
+                    {
+                        max_diffy=diffy;
+                    } 
                     float tol = 1e2;
                     if ((diffx > tol) || (diffy > tol)) {
                         printf("out[%d]=%f + %fi != exp[%d]=%f + %fi\n", expIdx, resultxx[expIdx].x, resultxx[expIdx].y, expIdx, exp[expIdx].x, exp[expIdx].y);
@@ -405,24 +415,9 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
                 if (verbose)
                     printf("\n");
             }
-=======
-        for(int i=0;i<16640;i++)
-        {
-            assert(exp[i].x==resultxx[i].x);
-            assert(exp[i].y==resultxx[i].y);
-
-            assert(exp[i].x==resultyy[i].x);
-            assert(exp[i].y==resultyy[i].y);
-
-            assert(exp[i].x==resultxy[i].x);
-            assert(exp[i].y==resultxy[i].y);
-
-            assert(exp[i].x==resultyx[i].x);
-            assert(exp[i].y==resultyx[i].y);
-
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
         }
         printf("test_cyclid_corr_accum passed\n");
+        printf("Max X:%f\tMax Y:%f\n",max_diffx,max_diffy);
     }
 
     return 1;

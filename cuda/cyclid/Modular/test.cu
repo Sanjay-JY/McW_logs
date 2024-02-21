@@ -1,3 +1,12 @@
+/************************************************************************************
+Default code ran using the input which is similar to the real-world data and computed
+all polarisations
+
+Link: https://bitbucket.org/assessmentmcw/cyclid/src/master/modular_cyclid_realworld.cu
+
+GPU Time: 23.1013ms
+***************************************************************************************/
+
 #include <stdio.h>
 #include <complex>
 #include <assert.h>
@@ -28,150 +37,75 @@ cudaError_t checkCuda(cudaError_t result)
   return result;
 }
 
+
 __global__ void cyclid_corr_accum_nlag_fast(float2 *in1, float2* in2, size_t size1, size_t size2, float2* out, int nlag, unsigned *phaseBins, int pfbChan, int numPfbChans, int iblock, int numPhaseBins, bool verbose) {
     
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    int phaseBinIdx, phaseBin, expIdx;
+    int inIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    int yIdx = blockIdx.y * blockDim.y + threadIdx.y;
+
+    unsigned phaseBin; 
+    int lookupBlockLen = (size2*2) + nlag - 2;
+    int phaseBinIdx = (iblock * lookupBlockLen) + (2*inIdx) + yIdx;
+    phaseBin = phaseBins[phaseBinIdx];
+    
+    int outIdx = (phaseBin * nlag * numPfbChans) + (nlag * pfbChan) + yIdx;
+    size_t outSz = numPhaseBins * numPfbChans * nlag;
     float2 tmp;
-    int ilag=tid%65;
-    int start=((tid/65)*1000)-2000;
-    if(start<0) 
-        start=0;
-    int end=start+3500;
-    if(tid>=16575)
-    {   
-        end=256184;
-    }
-    if(tid<16640){
-        for (int i = start; i<end; i++) {
-            // now accumulate in the right phase bin
-            phaseBinIdx = (2*i)+ilag;
-            phaseBin = phaseBins[phaseBinIdx];
-            expIdx = (phaseBin * nlag * numPfbChans) + (nlag * pfbChan) + ilag;
-            if((i>end-750)&&(expIdx!=tid))
-                break;
-            if(expIdx==tid)
-            {
-                int j = i+ilag;
-<<<<<<< HEAD
-                tmp.x = (in1[j].x * in2[i].x) + (in1[j].y  * in2[i].y);
-                tmp.y = (in1[j].y * in2[i].x) - (in1[j].x  * in2[i].y);  
-                out[expIdx].x += tmp.x;
-                out[expIdx].y -= tmp.y;
-=======
-                tmp.x = (in1[j].x * in2[i].x) - (in1[j].y * -1.0 * in2[i].y);
-                tmp.y = (in1[j].x * -1.0 * in2[i].y) + (in1[j].y * in2[i].x);  
-                tmp.y = -1.0 * tmp.y;
-                out[expIdx].x += tmp.x;
-                out[expIdx].y += tmp.y;
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
-            }
-        
-        }
-    }
+
+    if ((inIdx<size2) && (outIdx<outSz) && (yIdx<nlag)) {
+        int j = inIdx+yIdx;
+        tmp.x = (in1[j].x * in2[inIdx].x) - (in1[j].y * -1.0 * in2[inIdx].y);
+        tmp.y = (in1[j].x * -1.0 * in2[inIdx].y) + (in1[j].y * in2[inIdx].x);  
+        tmp.y = -1.0 * tmp.y;
+
+        atomicAdd(&out[outIdx].x, tmp.x);
+        atomicAdd(&out[outIdx].y, tmp.y);
+    } 
 }
+
+
 
 __global__ void cyclid_corr_accum_all_pols(float2 *in1, float2* in2, size_t size1, size_t size2, float2* outXX, float2* outYY, float2 *outXY, float2 *outYX, unsigned *phaseBins, int numPhaseBins, int numPfbChans, int nlag , int iblock, int pfbChan, size_t outSz, int lookupBlockLen, bool verbose) {
 
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    int phaseBinIdx, phaseBin, expIdx;
+    int inIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    int yIdx = blockIdx.y * blockDim.y + threadIdx.y;
+
+    unsigned phaseBin ; 
+    lookupBlockLen = (size2*2) + nlag - 2;
+    int phaseBinIdx = (iblock * lookupBlockLen) + (2*inIdx) + yIdx;
+    phaseBin = phaseBins[phaseBinIdx];
+
+    int outIdx = (phaseBin * nlag * numPfbChans) + (nlag * pfbChan) + yIdx;
     float2 tmp;
-    float2 sumxx;
-    float2 sumyy;
-    float2 sumxy;
-    float2 sumyx;
-    sumxx.x=0.0f;
-    sumxx.y=0.0f;
-    sumyy.x=0.0;
-    sumyy.y=0.0f;
-    sumxy.x=0.0f;
-    sumxy.y=0.0f;
-    sumyx.x=0.0f;
-    sumyx.y=0.0f;
-    int ilag=tid%65;
-    int start=((tid/65)*1000)-2000;
-    if(start<0) 
-        start=0;
-    int end=start+3500;
-    if(tid>=16575)
-    {   
-        end=256184;
-    }
-    if(tid<16640) {
-        for (int i = start; i<end; i++) {
-            phaseBinIdx = (2*i)+ilag;
-            phaseBin = phaseBins[phaseBinIdx];
-            expIdx = (phaseBin * nlag * numPfbChans) + (nlag * pfbChan) + ilag;
-            if((i>end-750)&&(expIdx!=tid))
-                break;
-            if(expIdx==tid){
-                int j = i+ilag;
+    if ((inIdx<size2) && (outIdx<outSz) && (yIdx<nlag)) {
+        int j = inIdx+yIdx;
 
-                float in1i_x=in1[i].x;
-                float in1i_y=in1[i].y;
-                float in1j_x=in1[j].x;
-                float in1j_y=in1[j].y;
+        // XX correlation
+        tmp.x = (in1[j].x * in1[inIdx].x) + (in1[j].y * in1[inIdx].y);
+        tmp.y = (in1[j].y * in1[inIdx].x)-(in1[j].x * in1[inIdx].y) ;
 
-                float in2i_x=in2[i].x;
-                float in2i_y=in2[i].y;
-                float in2j_x=in2[j].x;
-                float in2j_y=in2[j].y;
+        atomicAdd(&outXX[outIdx].x, tmp.x);
+        atomicAdd(&outXX[outIdx].y, -tmp.y);
 
-                // XX correlation
-                tmp.x = (in1j_x * in1i_x) + (in1j_y * in1i_y);
-                tmp.y = (in1j_y * in1i_x)-(in1j_x  * in1i_y);
-<<<<<<< HEAD
+        // YY correlation
+        tmp.x = (in2[j].x * in2[inIdx].x) + (in2[j].y  * in2[inIdx].y);
+        tmp.y = (in2[j].y * in2[inIdx].x)-(in2[j].x  * in2[inIdx].y);
 
-=======
-              
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
-                sumxx.x+=tmp.x;
-                sumxx.y-=tmp.y;
+        atomicAdd(&outYY[outIdx].x, tmp.x);
+        atomicAdd(&outYY[outIdx].y, -tmp.y);
 
-                // YY correlation
-                tmp.x = (in2j_x * in2i_x) +(in2j_y * in2i_y);
-<<<<<<< HEAD
-                tmp.y = (in2j_y * in2i_x)-(in2j_x * in2i_y);
-=======
-                tmp.y = (in2j_y * in2i_x)-(in2j_x * in2i_y) ;
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
-               
-                sumyy.x+=tmp.x;
-                sumyy.y-=tmp.y;
+        // XY correlation
+        tmp.x = (in1[j].x * in2[inIdx].x) + (in1[j].y  * in2[inIdx].y);
+        tmp.y = (in1[j].y * in2[inIdx].x)-(in1[j].x  * in2[inIdx].y) ;
+        atomicAdd(&outXY[outIdx].x, tmp.x);
+        atomicAdd(&outXY[outIdx].y, -tmp.y);
 
-                // XY correlation
-                tmp.x = (in1j_x * in2i_x) +(in1j_y  * in2i_y);
-<<<<<<< HEAD
-                tmp.y = (in1j_y * in2i_x)-(in1j_x  * in2i_y);
-=======
-                tmp.y = (in1j_y * in2i_x)-(in1j_x  * in2i_y)  ;
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
-               
-                sumxy.x+=tmp.x;
-                sumxy.y-=tmp.y;
- 
-                // YX correlation
-                tmp.x = (in2j_x * in1i_x) +(in2j_y  * in1i_y);
-<<<<<<< HEAD
-                tmp.y = (in2j_y * in1i_x)-(in2j_x  * in1i_y);
-=======
-                tmp.y = (in2j_y * in1i_x)-(in2j_x  * in1i_y)  ;
-                tmp.y = -1.0 * tmp.y;
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
+        // YX correlation
+        tmp.x = (in2[j].x * in1[inIdx].x) + (in2[j].y * in1[inIdx].y);
+        tmp.y = (in2[j].y * in1[inIdx].x)-(in2[j].x  * in1[inIdx].y);
+        atomicAdd(&outYX[outIdx].x, tmp.x);
+        atomicAdd(&outYX[outIdx].y, -tmp.y);
 
-                sumyx.x+=tmp.x;
-                sumyx.y-=tmp.y;
-
-            }
-        }
-        outXX[tid].x = sumxx.x;
-        outXX[tid].y = sumxx.y;
-        outYY[tid].x = sumyy.x;
-        outYY[tid].y = sumyy.y;
-        outXY[tid].x = sumxy.x;
-        outXY[tid].y = sumxy.y;
-        outYX[tid].x = sumyx.x;
-        outYX[tid].y = sumyx.y;
     } 
 }
 
@@ -187,7 +121,6 @@ void reference_code(float2 *in, float2 *exp, int inSize2, int nlag, int nchan, i
 {
     int phaseBinIdx, phaseBin, expIdx;
     float2 tmp, in1, in2;
-    printf("Insize:%d\n",inSize2);
     for (int i = 0; i<inSize2; i++) {
         if (verbose)
             printf("\n%d\n", i);
@@ -211,8 +144,8 @@ void reference_code(float2 *in, float2 *exp, int inSize2, int nlag, int nchan, i
             exp[expIdx].x += tmp.x;
             exp[expIdx].y += tmp.y;
         }
+    
     }
-    printf("EXPIDX->%d\n",expIdx);
 
     if (verbose)
         printf("\ncomputed expected results:\n");
@@ -224,10 +157,6 @@ void reference_code(float2 *in, float2 *exp, int inSize2, int nlag, int nchan, i
                 printf("chan %d\n", ichan);
             for (int ilag=0; ilag<nlag; ilag++ ) {
                 expIdx = (iphase * nlag * nchan) + (nlag * ichan) + ilag; 
-<<<<<<< HEAD
-                //printf("%fi\n", exp[expIdx].y);
-=======
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
                 if (verbose)
                     printf(" %f+%fi ", exp[expIdx].x, exp[expIdx].y);
             }
@@ -293,8 +222,8 @@ void call_fast_kernel(float2* out,int inSize,int profileSize,int phaseBinLookupS
         printf("num null threads: %d, %f percent\n", numKernelCalls - (inSize2*nlag), diffPct);
     }
 
-    dim3 grids((16640/1024)+1, 1, 1);
-    dim3 threads(1024, 1, 1);
+    dim3 grids(gridX, gridY, 1);
+    dim3 threads(threadX, threadY, 1);
     ichan=0;
 
     assert(threadX * threadY <= GPU_BLOCK_SIZE);
@@ -383,8 +312,8 @@ void call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int pha
         printf("num null threads: %d, %f percent\n", numKernelCalls - (inSize2*nlag), diffPct);
     }
 
-    dim3 grids((16640/1024)+1, 1, 1);
-    dim3 threads(1024, 1, 1);
+    dim3 grids(gridX, gridY, 1);
+    dim3 threads(threadX, threadY, 1);
     ichan=0;
 
     assert(threadX * threadY <= GPU_BLOCK_SIZE);
@@ -540,13 +469,8 @@ int main() {
     float2 *out;
     out = (float2 *)malloc(profileSize*sizeof(float2));
 
-<<<<<<< HEAD
-    call_fast_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
-    //call_all_polarisation_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
-=======
     //call_fast_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
     call_all_polarisation_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
 
     validate_results(nPhaseBins,nchan,nlag,out,exp,verbose);
 

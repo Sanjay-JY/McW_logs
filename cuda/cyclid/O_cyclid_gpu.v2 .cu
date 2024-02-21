@@ -204,8 +204,11 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
             phaseBinIdx = (2*i)+ilag;
             phaseBin = phaseBins[phaseBinIdx];
             expIdx = (phaseBin * nlag * nchan) + (nlag * ichan) + ilag;
+<<<<<<< HEAD
+=======
             if(expIdx<5)
                 printf("expIdx=%d\n",expIdx); 
+>>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
             if (verbose) {
                 printf(" pb=%d ",phaseBin);
                 printf(" pi=%d ",phaseBinIdx);
@@ -338,6 +341,11 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
 
     // check result:
     //verbose = true;
+<<<<<<< HEAD
+    float max_diffx=0;
+    float max_diffy=0;
+=======
+>>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
     if (verbose)
         printf("\nresults:\n");
     for (int iphase=0; iphase<nPhaseBins; iphase++) {
@@ -351,7 +359,19 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
                 if (verbose)
                     printf(" %f+%fi ", out[expIdx].x, out[expIdx].y);
                 float diffx = abs(out[expIdx].x - exp[expIdx].x);    
+<<<<<<< HEAD
+                float diffy = abs(out[expIdx].y - exp[expIdx].y); 
+                if(diffx>max_diffx)
+                {
+                    max_diffx=diffx;
+                }
+                if(diffy>max_diffy)
+                {
+                    max_diffy=diffy;
+                }   
+=======
                 float diffy = abs(out[expIdx].y - exp[expIdx].y);    
+>>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
                 float tol = 1e2;
                 // TBF: exact matches do work if fvalue above is zero
                 //if ((out[expIdx].x != exp[expIdx].x) || (out[expIdx].y != exp[expIdx].y)) {
@@ -368,7 +388,11 @@ int test_cyclid_corr_accum(cycfold_struct *cs, unsigned *phaseBins, bool maxOccu
 
 
     printf("test_cyclid_corr_accum passed\n");
+<<<<<<< HEAD
+    printf("Max X:%f\tMax Y:%f\n",max_diffx,max_diffy);
+=======
 
+>>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
     return 0;
 
 }

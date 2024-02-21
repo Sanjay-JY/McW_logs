@@ -65,3 +65,12 @@ Device 0: "NVIDIA GeForce RTX 3050 Laptop GPU"
 
 deviceQuery, CUDA Driver = CUDART, CUDA Driver Version = 12.3, CUDA Runtime Version = 12.3, NumDevs = 1
 Result = PASS
+<<<<<<< HEAD
+
+
+
+
+
+
+=======
+>>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773

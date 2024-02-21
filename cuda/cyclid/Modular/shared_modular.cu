@@ -1,3 +1,12 @@
+/****************************************************************************************
+A modified code which uses shared memory to store the accumulating sum and then finally 
+writing it into the global memory. It uses small input and computes only one polaristion.
+
+Link: https://bitbucket.org/assessmentmcw/cyclid/src/master/shared_modular.cu
+
+GPU Time: 0.123388ms
+*****************************************************************************************/
+
 #include <stdio.h>
 #include <complex>
 #include <assert.h>
@@ -15,6 +24,7 @@ struct cycfold_struct {
 
 int GPU_BLOCK_SIZE = 256*4;
 
+const int NUM_BINS=96;
 
 inline
 cudaError_t checkCuda(cudaError_t result)
@@ -30,85 +40,47 @@ cudaError_t checkCuda(cudaError_t result)
 
 
 __global__ void cyclid_corr_accum_nlag_fast(float2 *in1, float2* in2, size_t size1, size_t size2, float2* out, int nlag, unsigned *phaseBins, int pfbChan, int numPfbChans, int iblock, int numPhaseBins, bool verbose) {
-    
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-        int phaseBinIdx, phaseBin, expIdx;
-        float2 tmp;
-        float2 sum;
-        sum.x=0;
-        sum.y=0;
-        if(tid<16640){
-        for (int i = 0; i<size2; i++) {
-            for (int ilag=0; ilag<nlag; ilag++) {
-                // now accumulate in the right phase bin
-                phaseBinIdx = (2*i)+ilag;
-                phaseBin = phaseBins[phaseBinIdx];
-                expIdx = (phaseBin * nlag * numPfbChans) + (nlag * pfbChan) + ilag; 
-                if(expIdx==tid)
-                {
-                    int j = i+ilag;
-                    tmp.x = (in1[j].x * in2[i].x) - (in1[j].y * -1.0 * in2[i].y);
-                    tmp.y = (in1[j].x * -1.0 * in2[i].y) + (in1[j].y * in2[i].x);  
-                    tmp.y = -1.0 * tmp.y;
-                    sum.x+=tmp.x;
-                    sum.y+=tmp.y;
-                }
-            }
-        
-        }
-        out[tid].x += sum.x;
-        out[tid].y += sum.y;
-        }
-}
-
-
-
-__global__ void cyclid_corr_accum_all_pols(float2 *in1, float2* in2, size_t size1, size_t size2, float2* outXX, float2* outYY, float2 *outXY, float2 *outYX, unsigned *phaseBins, int numPhaseBins, int numPfbChans, int nlag , int iblock, int pfbChan, size_t outSz, int lookupBlockLen, bool verbose) {
-
+    // index into the data (in2)
     int inIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    // index into the lagged data partially (in1)
     int yIdx = blockIdx.y * blockDim.y + threadIdx.y;
-
-    unsigned phaseBin ; 
-    lookupBlockLen = (size2*2) + nlag - 2;
+    // what phase bin does this result go into?
+    unsigned phaseBin; 
+    int lookupBlockLen = (size2*2) + nlag - 2;
+    __shared__ float2 mem[NUM_BINS];
+    for(int i=0;i<NUM_BINS;i++)
+    {
+        mem[i].x=0;
+        mem[i].y=0;
+    }
+    __syncthreads();
     int phaseBinIdx = (iblock * lookupBlockLen) + (2*inIdx) + yIdx;
+    //int phaseBinIdx = (iblock * lookupBlockLen) + (2*threadIdx.x) + threadIdx.y;
     phaseBin = phaseBins[phaseBinIdx];
-
+    // and where in our output does the result go?
     int outIdx = (phaseBin * nlag * numPfbChans) + (nlag * pfbChan) + yIdx;
+    //int outIdx = (phaseBin * nlag * numPfbChans) + (nlag * pfbChan) + threadIdx.y;
+    size_t outSz = numPhaseBins * numPfbChans * nlag;
     float2 tmp;
     if ((inIdx<size2) && (outIdx<outSz) && (yIdx<nlag)) {
+        // shift the in1 element, and mutliply by in2 conjugate element
         int j = inIdx+yIdx;
 
-        // XX correlation
-        tmp.x = (in1[j].x * in1[inIdx].x) - (in1[j].y * -1.0 * in1[inIdx].y);
-        tmp.y = (in1[j].x * -1.0 * in1[inIdx].y) + (in1[j].y * in1[inIdx].x);
-        tmp.y = -1.0 * tmp.y;
-
-        atomicAdd(&outXX[outIdx].x, tmp.x);
-        atomicAdd(&outXX[outIdx].y, tmp.y);
-
-        // YY correlation
-        tmp.x = (in2[j].x * in2[inIdx].x) - (in2[j].y * -1.0 * in2[inIdx].y);
-        tmp.y = (in2[j].x * -1.0 * in2[inIdx].y) + (in2[j].y * in2[inIdx].x);
-        tmp.y = -1.0 * tmp.y;
-
-        atomicAdd(&outYY[outIdx].x, tmp.x);
-        atomicAdd(&outYY[outIdx].y, tmp.y);
-
-        // XY correlation
         tmp.x = (in1[j].x * in2[inIdx].x) - (in1[j].y * -1.0 * in2[inIdx].y);
         tmp.y = (in1[j].x * -1.0 * in2[inIdx].y) + (in1[j].y * in2[inIdx].x);
+        // we will want to take the C2R FFT of the conjugate of this  
         tmp.y = -1.0 * tmp.y;
-        atomicAdd(&outXY[outIdx].x, tmp.x);
-        atomicAdd(&outXY[outIdx].y, tmp.y);
 
-        // YX correlation
-        tmp.x = (in2[j].x * in1[inIdx].x) - (in2[j].y * -1.0 * in1[inIdx].y);
-        tmp.y = (in2[j].x * -1.0 * in1[inIdx].y) + (in2[j].y * in1[inIdx].x);
-        tmp.y = -1.0 * tmp.y;
-        atomicAdd(&outYX[outIdx].x, tmp.x);
-        atomicAdd(&outYX[outIdx].y, tmp.y);
+        atomicAdd(&mem[threadIdx.x*blockDim.x+threadIdx.y].x, tmp.x);
+        atomicAdd(&mem[threadIdx.x*blockDim.x+threadIdx.y].y, tmp.y);
+    }
+    __syncthreads();
 
+    if((inIdx<size2) && (outIdx<outSz) && (yIdx<nlag)){
+        atomicAdd(&out[outIdx].x, mem[threadIdx.x*blockDim.x+threadIdx.y].x);
+        atomicAdd(&out[outIdx].y, mem[threadIdx.x*blockDim.x+threadIdx.y].y);
     } 
+
 }
 
 
@@ -224,19 +196,11 @@ void call_fast_kernel(float2* out,int inSize,int profileSize,int phaseBinLookupS
         printf("num null threads: %d, %f percent\n", numKernelCalls - (inSize2*nlag), diffPct);
     }
 
-<<<<<<< HEAD
-    dim3 grids(16641, 1, 1);
-    dim3 threads(1024, 1, 1);
-    ichan=0;
-
-    //assert(threadX * threadY <= GPU_BLOCK_SIZE);
-=======
-    dim3 grids((16640/1024)+1, 1, 1);
-    dim3 threads(1024, 1, 1);
+    dim3 grids(gridX, gridY, 1);
+    dim3 threads(threadX, threadY, 1);
     ichan=0;
 
     assert(threadX * threadY <= GPU_BLOCK_SIZE);
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
 
     cudaEvent_t startEvent, stopEvent;
     float ms;
@@ -256,97 +220,7 @@ void call_fast_kernel(float2* out,int inSize,int profileSize,int phaseBinLookupS
     }
 
     cudaMemcpy(out, out_gpu, profileSize*sizeof(float2), cudaMemcpyDeviceToHost);
-
-    cudaFree(in_gpu);
-    cudaFree(iny_gpu);
-    cudaFree(out_gpu);
-    cudaFree(outyy_gpu);
-    cudaFree(outxy_gpu);
-    cudaFree(outyx_gpu);
-    cudaFree(phaseBins_gpu);
-
-}
-
-void call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phaseBinLookupSize,int inSize2,int nlag,float2 *in,float2 *iny,unsigned* phaseBins,int nPhaseBins,int nchan,int iblock,int ichan,bool maxOccupancy,bool time,bool verbose)
-{
-    printf("\n\nALL POLARISATION KERNEL\n\n");
-    float2 *in_gpu, *iny_gpu, *out_gpu, *outyy_gpu, *outxy_gpu, *outyx_gpu; 
-    unsigned *phaseBins_gpu;
-    cudaMalloc((float2 **)&in_gpu, inSize*sizeof(float2));
-    cudaMalloc((float2 **)&iny_gpu, inSize*sizeof(float2));
-    cudaMalloc((float2 **)&out_gpu, profileSize*sizeof(float2));
-    cudaMalloc((float2 **)&outyy_gpu, profileSize*sizeof(float2));
-    cudaMalloc((float2 **)&outxy_gpu, profileSize*sizeof(float2));
-    cudaMalloc((float2 **)&outyx_gpu, profileSize*sizeof(float2));
-    cudaMalloc((unsigned **)&phaseBins_gpu, phaseBinLookupSize*sizeof(unsigned));
-    cudaMemset(out_gpu, 0, profileSize*sizeof(float2));
-    cudaMemset(outyy_gpu, 0, profileSize*sizeof(float2));
-    cudaMemset(outxy_gpu, 0, profileSize*sizeof(float2));
-    cudaMemset(outyx_gpu, 0, profileSize*sizeof(float2));
-
-    cudaMemcpy(in_gpu, in, inSize*sizeof(float2), cudaMemcpyHostToDevice);
-    cudaMemcpy(iny_gpu, iny, inSize*sizeof(float2), cudaMemcpyHostToDevice);
-    cudaMemcpy(phaseBins_gpu, phaseBins, phaseBinLookupSize*sizeof(unsigned), cudaMemcpyHostToDevice);
-
-    int gridX, gridY, threadX, threadY;
-    if (inSize <  128) { 
-        gridX = 1;
-        gridY = 1;
-        threadX = inSize2;
-        threadY = nlag;
-    } else {
-        if (maxOccupancy) {
-            int gpuGridSize = ((inSize2 + 256) / 256);
-            gridX = gpuGridSize;
-            gridY = (nlag+4)/4;
-            threadX = 256; ///thisGpuBlockSize; //GPU_BLOCK_SIZE / nlag;
-            threadY = 4; //nlag;
-        } else {
-            threadX = GPU_BLOCK_SIZE/nlag;
-            threadY = nlag;
-            gridX = (inSize2 + threadX) / threadX;
-            gridY = 1;
-        }
-
-    }
-
-    int numKernelCalls = gridX * gridY * threadX * threadY;
-
-    if (verbose) {
-        printf("inSize2=%d nlag=%d\n", inSize2, nlag);
-        printf("grid x=%d, y=%d\n", gridX, gridY);
-        printf("thread x=%d, y=%d\n", threadX, threadY);
-        printf("num kernel calls: %d\n", numKernelCalls);
-        printf("num needed: %d\n", inSize2 * nlag);
-        float diffPct = ((numKernelCalls - (inSize2*nlag))/numKernelCalls)*100.0;
-        printf("num null threads: %d, %f percent\n", numKernelCalls - (inSize2*nlag), diffPct);
-    }
-
-    dim3 grids(gridX, gridY, 1);
-    dim3 threads(threadX, threadY, 1);
-    ichan=0;
-
-    assert(threadX * threadY <= GPU_BLOCK_SIZE);
-
-    cudaEvent_t startEvent, stopEvent;
-    float ms;
-    if (time) {
-        checkCuda( cudaEventCreate(&startEvent) );
-        checkCuda( cudaEventCreate(&stopEvent) );  
-        checkCuda( cudaEventRecord(startEvent, 0) );
-    }
-
-    cyclid_corr_accum_all_pols<<<grids,threads>>>(in_gpu, iny_gpu, inSize, inSize2, out_gpu, outyy_gpu, outxy_gpu, outyx_gpu, phaseBins_gpu, nPhaseBins, nchan, nlag, iblock, ichan, profileSize, phaseBinLookupSize, verbose);
     
-    if (time) {
-        checkCuda( cudaEventRecord(stopEvent, 0) );
-        checkCuda( cudaEventSynchronize(stopEvent) );
-        checkCuda( cudaEventElapsedTime(&ms, startEvent, stopEvent) ); 
-        printf("%f\n", ms);
-    }
-
-    cudaMemcpy(out, out_gpu, profileSize*sizeof(float2), cudaMemcpyDeviceToHost);
-
     cudaFree(in_gpu);
     cudaFree(iny_gpu);
     cudaFree(out_gpu);
@@ -356,7 +230,6 @@ void call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int pha
     cudaFree(phaseBins_gpu);
 
 }
-
 
 int validate_results(int nPhaseBins,int nchan,int nlag,float2 *out,float2 *exp,bool verbose){
     int expIdx;
@@ -388,45 +261,24 @@ int validate_results(int nPhaseBins,int nchan,int nlag,float2 *out,float2 *exp,b
     printf("test_cyclid_corr_accum passed\n");
     return 1;
 }
-    
-    
+        
 
 int main() {
-    printf("Realworld_data_cyclid_gpu\n");
+    printf("Sample_data_cyclid_gpu\n");
 
     cycfold_struct cs;
 
-    cs.ncyc = 128;
+    cs.ncyc = 4;
     cs.nlag = (cs.ncyc/2) + 1; 
-    cs.numTimeSamplesHfft = 256250;
+    cs.numTimeSamplesHfft = 16;
     cs.nBlocks = 1;
     cs.nchanPfb = 1;
-    cs.numPhaseBins = 256;
+    cs.numPhaseBins = 4;
 
     int phaseBinLookupSize = (2*cs.numTimeSamplesHfft) + cs.nlag - 2;
     unsigned *phaseBins;
     phaseBins = (unsigned *)malloc(phaseBinLookupSize *sizeof(unsigned));
     memset(phaseBins, 0, phaseBinLookupSize*sizeof(int));
-
-    int phaseStep = phaseBinLookupSize / cs.numPhaseBins;
-    for (int iphase=0; iphase<cs.numPhaseBins; iphase++) {
-        int start = iphase*phaseStep;
-        int end = (iphase+1)*phaseStep;
-        for (int j=start; j<end; j++)
-            phaseBins[j] = iphase;
-    }
-
-    int phaseCnts[cs.numPhaseBins];
-    memset(phaseCnts, 0, cs.numPhaseBins*sizeof(int));
-    for (int i = 0; i < cs.numTimeSamplesHfft; i++)
-        for (int ilag = 0; ilag < cs.nlag; ilag++)
-            phaseCnts[phaseBins[(2*i) + ilag]]++;
-    
-    int phaseCntTotal = 0;
-    for (int i=0; i<cs.numPhaseBins; i++) {
-        phaseCntTotal += phaseCnts[i];
-    }    
-    assert(phaseCntTotal == cs.numTimeSamplesHfft * cs.nlag);    
 
     bool time = true;
     bool maxOccupancy = false;
@@ -480,7 +332,6 @@ int main() {
     out = (float2 *)malloc(profileSize*sizeof(float2));
 
     call_fast_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
-    //call_all_polarisation_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
 
     validate_results(nPhaseBins,nchan,nlag,out,exp,verbose);
 

@@ -1,3 +1,13 @@
+/*****************************************************************************************
+A modified code where a pattern is identified in the input and the iterations in the loops 
+are reduced accordingly. It uses input which is similar to the real-world data and computes 
+all polarisations.
+
+Link: https://bitbucket.org/assessmentmcw/cyclid/src/master/output_based.cu
+
+GPU Time: 1.13476 ms
+******************************************************************************************/
+
 #include <stdio.h>
 #include <complex>
 #include <assert.h>
@@ -53,18 +63,10 @@ __global__ void cyclid_corr_accum_nlag_fast(float2 *in1, float2* in2, size_t siz
             if(expIdx==tid)
             {
                 int j = i+ilag;
-<<<<<<< HEAD
                 tmp.x = (in1[j].x * in2[i].x) + (in1[j].y  * in2[i].y);
                 tmp.y = (in1[j].y * in2[i].x) - (in1[j].x  * in2[i].y);  
                 out[expIdx].x += tmp.x;
                 out[expIdx].y -= tmp.y;
-=======
-                tmp.x = (in1[j].x * in2[i].x) - (in1[j].y * -1.0 * in2[i].y);
-                tmp.y = (in1[j].x * -1.0 * in2[i].y) + (in1[j].y * in2[i].x);  
-                tmp.y = -1.0 * tmp.y;
-                out[expIdx].x += tmp.x;
-                out[expIdx].y += tmp.y;
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
             }
         
         }
@@ -120,44 +122,27 @@ __global__ void cyclid_corr_accum_all_pols(float2 *in1, float2* in2, size_t size
                 // XX correlation
                 tmp.x = (in1j_x * in1i_x) + (in1j_y * in1i_y);
                 tmp.y = (in1j_y * in1i_x)-(in1j_x  * in1i_y);
-<<<<<<< HEAD
 
-=======
-              
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
                 sumxx.x+=tmp.x;
                 sumxx.y-=tmp.y;
 
                 // YY correlation
                 tmp.x = (in2j_x * in2i_x) +(in2j_y * in2i_y);
-<<<<<<< HEAD
                 tmp.y = (in2j_y * in2i_x)-(in2j_x * in2i_y);
-=======
-                tmp.y = (in2j_y * in2i_x)-(in2j_x * in2i_y) ;
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
                
                 sumyy.x+=tmp.x;
                 sumyy.y-=tmp.y;
 
                 // XY correlation
                 tmp.x = (in1j_x * in2i_x) +(in1j_y  * in2i_y);
-<<<<<<< HEAD
                 tmp.y = (in1j_y * in2i_x)-(in1j_x  * in2i_y);
-=======
-                tmp.y = (in1j_y * in2i_x)-(in1j_x  * in2i_y)  ;
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
                
                 sumxy.x+=tmp.x;
                 sumxy.y-=tmp.y;
  
                 // YX correlation
                 tmp.x = (in2j_x * in1i_x) +(in2j_y  * in1i_y);
-<<<<<<< HEAD
                 tmp.y = (in2j_y * in1i_x)-(in2j_x  * in1i_y);
-=======
-                tmp.y = (in2j_y * in1i_x)-(in2j_x  * in1i_y)  ;
-                tmp.y = -1.0 * tmp.y;
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
 
                 sumyx.x+=tmp.x;
                 sumyx.y-=tmp.y;
@@ -224,10 +209,7 @@ void reference_code(float2 *in, float2 *exp, int inSize2, int nlag, int nchan, i
                 printf("chan %d\n", ichan);
             for (int ilag=0; ilag<nlag; ilag++ ) {
                 expIdx = (iphase * nlag * nchan) + (nlag * ichan) + ilag; 
-<<<<<<< HEAD
                 //printf("%fi\n", exp[expIdx].y);
-=======
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
                 if (verbose)
                     printf(" %f+%fi ", exp[expIdx].x, exp[expIdx].y);
             }
@@ -540,13 +522,8 @@ int main() {
     float2 *out;
     out = (float2 *)malloc(profileSize*sizeof(float2));
 
-<<<<<<< HEAD
     call_fast_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
     //call_all_polarisation_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
-=======
-    //call_fast_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
-    call_all_polarisation_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
 
     validate_results(nPhaseBins,nchan,nlag,out,exp,verbose);
 

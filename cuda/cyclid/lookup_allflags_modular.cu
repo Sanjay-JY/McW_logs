@@ -15,10 +15,6 @@ struct cycfold_struct {
 
 int GPU_BLOCK_SIZE = 256*4;
 
-const int LOOP_SIZE=256;
-const int BLOCK_SIZE=256;
-
-
 inline
 cudaError_t checkCuda(cudaError_t result)
 {
@@ -33,15 +29,8 @@ cudaError_t checkCuda(cudaError_t result)
 
 
 __global__ void lookuptable_kernel(float2 *in1, float2 *in2, int2 *d_lookup, float2 *d_xxresult, float2 *d_yyresult, float2 *d_xyresult, float2 *d_yxresult) {
-    
     int rowIdx = blockIdx.x * blockDim.x + threadIdx.x;
-    int threadrow = threadIdx.y;
-    
-    __shared__ float2 memxx[BLOCK_SIZE][4];
-    __shared__ float2 memyy[BLOCK_SIZE][4];
-    __shared__ float2 memxy[BLOCK_SIZE][4];
-    __shared__ float2 memyx[BLOCK_SIZE][4];
-
+    // Check if the thread index is within the valid range (less than or equal to 16640)
     if (rowIdx < 16640) {
         float2 sumxx,sumyy,sumxy,sumyx;
         sumxx.x = 0.0f;
@@ -52,14 +41,7 @@ __global__ void lookuptable_kernel(float2 *in1, float2 *in2, int2 *d_lookup, flo
         sumxy.y = 0.0f;
         sumyx.x = 0.0f;
         sumyx.y = 0.0f;
-
-        int start=(threadrow*LOOP_SIZE)+1;
-        int end=start+LOOP_SIZE-1;
-
-        if(end>=1003) end=1002;
-        
-        for (int colIdx = start; colIdx <= end; colIdx++) {
-
+        for (int colIdx = 1; colIdx < 1003; colIdx++) {
             int2 current = d_lookup[rowIdx * 1003 + colIdx];
 
             if(current.x==-1) break;
@@ -77,90 +59,48 @@ __global__ void lookuptable_kernel(float2 *in1, float2 *in2, int2 *d_lookup, flo
             float in2y_y=in2[current_y].y;
             float in2x_y=in2[current_x].y;
 
-
             float2 product;
 
             //XX Corelation
             product.x = (in1y_x * in1x_x) - (in1y_y *-1.0* in1x_y);
             product.y = (in1y_x * -1.0*in1x_y) + (in1y_y * in1x_x);
             product.y = -1.0*product.y;
-            sumxx.x += product.x;      
+            sumxx.x += product.x;
             sumxx.y += product.y;
 
+            //YY Corelation
             product.x = (in2y_x * in2x_x) - (in2y_y *-1.0* in2x_y);
             product.y = (in2y_x * -1.0*in2x_y) + (in2y_y * in2x_x);
             product.y = -1.0*product.y;
-            sumyy.x += product.x;      
+            sumyy.x += product.x;
             sumyy.y += product.y;
 
+            //XY Corelation
             product.x = (in1y_x * in2x_x) - (in1y_y *-1.0* in2x_y);
             product.y = (in1y_x * -1.0*in2x_y) + (in1y_y * in2x_x);
             product.y = -1.0*product.y;
-            sumxy.x += product.x;      
+            sumxy.x += product.x;
             sumxy.y += product.y;
 
+            //YX Corelation
             product.x = (in2y_x * in1x_x) - (in2y_y *-1.0* in1x_y);
             product.y = (in2y_x * -1.0*in1x_y) + (in2y_y * in1x_x);
             product.y = -1.0*product.y;
-            sumyx.x += product.x;      
+            sumyx.x += product.x;
             sumyx.y += product.y;
-            
         }
 
-        //__syncthreads();
+        d_xxresult[rowIdx].x = sumxx.x;
+        d_xxresult[rowIdx].y = sumxx.y;
+        d_yyresult[rowIdx].x = sumyy.x;
+        d_yyresult[rowIdx].y = sumyy.y;
+        d_xyresult[rowIdx].x = sumxy.x;
+        d_xyresult[rowIdx].y = sumxy.y;
+        d_yxresult[rowIdx].x = sumyx.x;
+        d_yxresult[rowIdx].y = sumyx.y;
 
-        memxx[threadIdx.x][threadIdx.y].x=sumxx.x;    
-        memxx[threadIdx.x][threadIdx.y].y=sumxx.y;
-
-        memyy[threadIdx.x][threadIdx.y].x=sumyy.x;    
-        memyy[threadIdx.x][threadIdx.y].y=sumyy.y;
-
-        memxy[threadIdx.x][threadIdx.y].x=sumxy.x;     
-        memxy[threadIdx.x][threadIdx.y].y=sumxy.y;
-
-        memyx[threadIdx.x][threadIdx.y].x=sumyx.x;     
-        memyx[threadIdx.x][threadIdx.y].y=sumyx.y;
-        
-        __syncthreads();
-
-        float2 xxfinal_sum,yyfinal_sum,xyfinal_sum,yxfinal_sum;
-        xxfinal_sum.x=0;
-        xxfinal_sum.y=0;
-        yyfinal_sum.x=0;
-        yyfinal_sum.y=0;
-        xyfinal_sum.x=0;
-        xyfinal_sum.y=0;
-        yxfinal_sum.x=0;
-        yxfinal_sum.y=0;
-
-        if(threadIdx.y==0)
-        {
-            for(int i=0;i<4;i++)
-            {
-                xxfinal_sum.x+=memxx[threadIdx.x][i].x;
-                xxfinal_sum.y+=memxx[threadIdx.x][i].y;
-                yyfinal_sum.x+=memyy[threadIdx.x][i].x;
-                yyfinal_sum.y+=memyy[threadIdx.x][i].y;
-                xyfinal_sum.x+=memxy[threadIdx.x][i].x;
-                xyfinal_sum.y+=memxy[threadIdx.x][i].y;
-                yxfinal_sum.x+=memyx[threadIdx.x][i].x;
-                yxfinal_sum.y+=memyx[threadIdx.x][i].y;
-            }
-            
-            d_xxresult[rowIdx].x = xxfinal_sum.x;     
-            d_xxresult[rowIdx].y = xxfinal_sum.y;
-
-            d_yyresult[rowIdx].x = yyfinal_sum.x;     
-            d_yyresult[rowIdx].y = yyfinal_sum.y;
-
-            d_xyresult[rowIdx].x = xyfinal_sum.x;     
-            d_xyresult[rowIdx].y = xyfinal_sum.y;
-
-            d_yxresult[rowIdx].x = yxfinal_sum.x; 
-            d_yxresult[rowIdx].y = yxfinal_sum.y;
-        }
-    
     }
+    
 }
 
 
@@ -227,24 +167,16 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
 
     int phaseBinIdx, phaseBin, expIdx;
 
-<<<<<<< HEAD
     clock_t start_time = clock();
-=======
-    
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
+
     int2 *lookuptable;
-    lookuptable= (int2 *)malloc(16640*1003* sizeof(int2));
+    lookuptable= (int2 *)malloc(16640*1003*sizeof(int2));
     fflush(stdout);
     for(int c=0;c<16640*1003;c++)
     {
         lookuptable[c].x=-1;
     }
 
-<<<<<<< HEAD
-=======
-    clock_t start_time = clock();
-    
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
     for (int i = 0; i<inSize2; i++) {
         for (int ilag=0; ilag<nlag; ilag++) {
             phaseBinIdx = (2*i)+ilag;
@@ -313,8 +245,9 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
     cudaMemcpy(in_gpu, in, inSize*sizeof(float2), cudaMemcpyHostToDevice);
     cudaMemcpy(iny_gpu, iny, inSize*sizeof(float2), cudaMemcpyHostToDevice);
 
-    dim3 NUM_THREADS(BLOCK_SIZE,4);
-    dim3 NUM_BLOCKS(((16640*4)/1024)+1,1,1);
+
+    int NUM_THREADS =1024;
+    int NUM_BLOCKS = (16640+ NUM_THREADS-1) / NUM_THREADS;
 
     cudaEvent_t startEvent, stopEvent;
     float ms;
@@ -338,10 +271,6 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
         fprintf(stderr, "Kernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
         return 1;
     }
-<<<<<<< HEAD
-
-=======
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
     cudaDeviceSynchronize();
 
     cudaMemcpy(resultxx, d_xxresult, 16640 * sizeof(float2), cudaMemcpyDeviceToHost);
@@ -378,8 +307,6 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
                 exp[expIdx].y += tmp.y;
             }
         }
-
-<<<<<<< HEAD
         int expIdx;
         if (verbose)
             printf("\nresults:\n");
@@ -405,29 +332,13 @@ int call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phas
                 if (verbose)
                     printf("\n");
             }
-=======
-        for(int i=0;i<16640;i++)
-        {
-            assert(exp[i].x==resultxx[i].x);
-            assert(exp[i].y==resultxx[i].y);
-
-            assert(exp[i].x==resultyy[i].x);
-            assert(exp[i].y==resultyy[i].y);
-
-            assert(exp[i].x==resultxy[i].x);
-            assert(exp[i].y==resultxy[i].y);
-
-            assert(exp[i].x==resultyx[i].x);
-            assert(exp[i].y==resultyx[i].y);
-
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
         }
         printf("test_cyclid_corr_accum passed\n");
     }
-
     return 1;
 }
- 
+
+
 int main() {
     printf("Realworld_data_cyclid_gpu\n");
 

@@ -28,83 +28,122 @@ cudaError_t checkCuda(cudaError_t result)
   return result;
 }
 
+
 __global__ void cyclid_corr_accum_nlag_fast(float2 *in1, float2* in2, size_t size1, size_t size2, float2* out, int nlag, unsigned *phaseBins, int pfbChan, int numPfbChans, int iblock, int numPhaseBins, bool verbose) {
-    
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int tid = threadIdx.x;
+    int blkid = blockIdx.x;
     int phaseBinIdx, phaseBin, expIdx;
     float2 tmp;
-    int ilag=tid%65;
-    int start=((tid/65)*1000)-2000;
-    if(start<0) 
+    float2 sum;
+    int start=tid*251;
+    int end=start+251;
+    if(start>256184)
+    {
         start=0;
-    int end=start+3500;
-    if(tid>=16575)
-    {   
+        end=0;
+    }
+    if(end>256184)
+    {
         end=256184;
     }
-    if(tid<16640){
+    __shared__ float2 mem[1024];
+    sum.x=0;
+    sum.y=0;
+    // if(blkid==16575&&tid==1020)
+    // {
+    //     printf("Start: %d\t End: %d\n",start,end);
+    // }
+    if(blkid<16640){
         for (int i = start; i<end; i++) {
-            // now accumulate in the right phase bin
-            phaseBinIdx = (2*i)+ilag;
-            phaseBin = phaseBins[phaseBinIdx];
-            expIdx = (phaseBin * nlag * numPfbChans) + (nlag * pfbChan) + ilag;
-            if((i>end-750)&&(expIdx!=tid))
-                break;
-            if(expIdx==tid)
-            {
-                int j = i+ilag;
-<<<<<<< HEAD
-                tmp.x = (in1[j].x * in2[i].x) + (in1[j].y  * in2[i].y);
-                tmp.y = (in1[j].y * in2[i].x) - (in1[j].x  * in2[i].y);  
-                out[expIdx].x += tmp.x;
-                out[expIdx].y -= tmp.y;
-=======
-                tmp.x = (in1[j].x * in2[i].x) - (in1[j].y * -1.0 * in2[i].y);
-                tmp.y = (in1[j].x * -1.0 * in2[i].y) + (in1[j].y * in2[i].x);  
-                tmp.y = -1.0 * tmp.y;
-                out[expIdx].x += tmp.x;
-                out[expIdx].y += tmp.y;
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
+            for (int ilag=0; ilag<nlag; ilag++) {
+                // now accumulate in the right phase bin
+                phaseBinIdx = (2*i)+ilag;
+                phaseBin = phaseBins[phaseBinIdx];
+                expIdx = (phaseBin * nlag * numPfbChans) + (nlag * pfbChan) + ilag; 
+                if(expIdx==blkid)
+                {
+                    int j = i+ilag;
+                    float in2i_x=in2[i].x;
+                    float in2i_y=in2[i].y;
+                    float in1j_x=in1[j].x;
+                    float in1j_y=in1[j].y;
+                    tmp.x = (in1j_x * in2i_x) + (in1j_y * in2i_y);
+                    tmp.y = (in1j_y * in2i_x)-(in1j_x * in2i_y);  
+                    sum.x+=tmp.x;
+                    sum.y-=tmp.y;
+                }
             }
-        
+
+        }
+        mem[tid].x = sum.x;
+        mem[tid].y = sum.y;
+        __syncthreads();
+
+        for (unsigned int stride = blockDim.x/2; stride>=1; stride = stride/2)
+		{
+            __syncthreads();
+			if (tid <stride && tid+stride < 1024 )
+            {
+                mem[tid].x += mem[tid + stride].x;
+                mem[tid].y += mem[tid + stride].y;
+            }
+		}
+		__syncthreads();
+
+		if (tid == 0)
+        {
+            out[blkid].x=mem[0].x;
+            out[blkid].y=mem[0].y;
         }
     }
 }
 
+
+
 __global__ void cyclid_corr_accum_all_pols(float2 *in1, float2* in2, size_t size1, size_t size2, float2* outXX, float2* outYY, float2 *outXY, float2 *outYX, unsigned *phaseBins, int numPhaseBins, int numPfbChans, int nlag , int iblock, int pfbChan, size_t outSz, int lookupBlockLen, bool verbose) {
 
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int tid = threadIdx.x;
+    int blkid = blockIdx.x;
     int phaseBinIdx, phaseBin, expIdx;
     float2 tmp;
+    int start=tid*251;
+    int end=start+251;
+    if(start>256184)
+    {
+        start=0;
+        end=0;
+    }
+    if(end>256184)
+    {
+        end=256184;
+    }
+
+    __shared__ float2 memxx[1024];
+    __shared__ float2 memyy[1024];
+    __shared__ float2 memxy[1024];
+    __shared__ float2 memyx[1024];
     float2 sumxx;
     float2 sumyy;
     float2 sumxy;
     float2 sumyx;
     sumxx.x=0.0f;
     sumxx.y=0.0f;
-    sumyy.x=0.0;
+    sumyy.x=0.0f;
     sumyy.y=0.0f;
     sumxy.x=0.0f;
     sumxy.y=0.0f;
     sumyx.x=0.0f;
     sumyx.y=0.0f;
-    int ilag=tid%65;
-    int start=((tid/65)*1000)-2000;
-    if(start<0) 
-        start=0;
-    int end=start+3500;
-    if(tid>=16575)
-    {   
-        end=256184;
-    }
-    if(tid<16640) {
-        for (int i = start; i<end; i++) {
+
+
+    for (int i = start; i<end; i++) {
+        for (int ilag=0; ilag<nlag; ilag++) {
+            // now accumulate in the right phase bin
             phaseBinIdx = (2*i)+ilag;
             phaseBin = phaseBins[phaseBinIdx];
-            expIdx = (phaseBin * nlag * numPfbChans) + (nlag * pfbChan) + ilag;
-            if((i>end-750)&&(expIdx!=tid))
-                break;
-            if(expIdx==tid){
+            expIdx = (phaseBin * nlag * numPfbChans) + (nlag * pfbChan) + ilag; 
+            if(expIdx==blkid)
+            {
                 int j = i+ilag;
 
                 float in1i_x=in1[i].x;
@@ -120,59 +159,84 @@ __global__ void cyclid_corr_accum_all_pols(float2 *in1, float2* in2, size_t size
                 // XX correlation
                 tmp.x = (in1j_x * in1i_x) + (in1j_y * in1i_y);
                 tmp.y = (in1j_y * in1i_x)-(in1j_x  * in1i_y);
-<<<<<<< HEAD
 
-=======
-              
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
                 sumxx.x+=tmp.x;
                 sumxx.y-=tmp.y;
 
                 // YY correlation
                 tmp.x = (in2j_x * in2i_x) +(in2j_y * in2i_y);
-<<<<<<< HEAD
                 tmp.y = (in2j_y * in2i_x)-(in2j_x * in2i_y);
-=======
-                tmp.y = (in2j_y * in2i_x)-(in2j_x * in2i_y) ;
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
-               
+            
                 sumyy.x+=tmp.x;
                 sumyy.y-=tmp.y;
 
                 // XY correlation
                 tmp.x = (in1j_x * in2i_x) +(in1j_y  * in2i_y);
-<<<<<<< HEAD
                 tmp.y = (in1j_y * in2i_x)-(in1j_x  * in2i_y);
-=======
-                tmp.y = (in1j_y * in2i_x)-(in1j_x  * in2i_y)  ;
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
-               
+            
                 sumxy.x+=tmp.x;
                 sumxy.y-=tmp.y;
- 
+
                 // YX correlation
                 tmp.x = (in2j_x * in1i_x) +(in2j_y  * in1i_y);
-<<<<<<< HEAD
                 tmp.y = (in2j_y * in1i_x)-(in2j_x  * in1i_y);
-=======
-                tmp.y = (in2j_y * in1i_x)-(in2j_x  * in1i_y)  ;
-                tmp.y = -1.0 * tmp.y;
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
 
                 sumyx.x+=tmp.x;
                 sumyx.y-=tmp.y;
 
             }
         }
-        outXX[tid].x = sumxx.x;
-        outXX[tid].y = sumxx.y;
-        outYY[tid].x = sumyy.x;
-        outYY[tid].y = sumyy.y;
-        outXY[tid].x = sumxy.x;
-        outXY[tid].y = sumxy.y;
-        outYX[tid].x = sumyx.x;
-        outYX[tid].y = sumyx.y;
-    } 
+
+    }
+    memxx[tid].x = sumxx.x;
+    memxx[tid].y = sumxx.y;
+
+    memyy[tid].x = sumyy.x;
+    memyy[tid].y = sumyy.y;
+    
+    memxy[tid].x = sumxy.x;
+    memxy[tid].y = sumxy.y;
+    
+    memyx[tid].x = sumyx.x;
+    memyx[tid].y = sumyx.y;
+
+    __syncthreads();
+
+
+    for (unsigned int stride = blockDim.x/2; stride>=1; stride = stride/2)
+    {
+        __syncthreads();
+        if (tid <stride && tid+stride < 1024 )
+        {
+            memxx[tid].x += memxx[tid + stride].x;
+            memxx[tid].y += memxx[tid + stride].y;
+
+            memyy[tid].x += memyy[tid + stride].x;
+            memyy[tid].y += memyy[tid + stride].y;
+
+            memxy[tid].x += memxy[tid + stride].x;
+            memxy[tid].y += memxy[tid + stride].y;
+
+            memyx[tid].x += memyx[tid + stride].x;
+            memyx[tid].y += memyx[tid + stride].y;
+        }
+    }
+    __syncthreads();
+
+    if (tid == 0)
+    {
+        outXX[blkid].x=memxx[0].x;
+        outXX[blkid].y=memxx[0].y;
+
+        outYY[blkid].x=memyy[0].x;
+        outYY[blkid].y=memyy[0].y;
+
+        outXY[blkid].x=memxy[0].x;
+        outXY[blkid].y=memxy[0].y;
+
+        outYX[blkid].x=memyx[0].x;
+        outYX[blkid].y=memyx[0].y;
+    }
 }
 
 
@@ -187,7 +251,6 @@ void reference_code(float2 *in, float2 *exp, int inSize2, int nlag, int nchan, i
 {
     int phaseBinIdx, phaseBin, expIdx;
     float2 tmp, in1, in2;
-    printf("Insize:%d\n",inSize2);
     for (int i = 0; i<inSize2; i++) {
         if (verbose)
             printf("\n%d\n", i);
@@ -211,8 +274,8 @@ void reference_code(float2 *in, float2 *exp, int inSize2, int nlag, int nchan, i
             exp[expIdx].x += tmp.x;
             exp[expIdx].y += tmp.y;
         }
+    
     }
-    printf("EXPIDX->%d\n",expIdx);
 
     if (verbose)
         printf("\ncomputed expected results:\n");
@@ -224,10 +287,6 @@ void reference_code(float2 *in, float2 *exp, int inSize2, int nlag, int nchan, i
                 printf("chan %d\n", ichan);
             for (int ilag=0; ilag<nlag; ilag++ ) {
                 expIdx = (iphase * nlag * nchan) + (nlag * ichan) + ilag; 
-<<<<<<< HEAD
-                //printf("%fi\n", exp[expIdx].y);
-=======
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
                 if (verbose)
                     printf(" %f+%fi ", exp[expIdx].x, exp[expIdx].y);
             }
@@ -293,7 +352,7 @@ void call_fast_kernel(float2* out,int inSize,int profileSize,int phaseBinLookupS
         printf("num null threads: %d, %f percent\n", numKernelCalls - (inSize2*nlag), diffPct);
     }
 
-    dim3 grids((16640/1024)+1, 1, 1);
+    dim3 grids(16640, 1, 1);
     dim3 threads(1024, 1, 1);
     ichan=0;
 
@@ -383,7 +442,7 @@ void call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int pha
         printf("num null threads: %d, %f percent\n", numKernelCalls - (inSize2*nlag), diffPct);
     }
 
-    dim3 grids((16640/1024)+1, 1, 1);
+    dim3 grids(16641, 1, 1);
     dim3 threads(1024, 1, 1);
     ichan=0;
 
@@ -540,13 +599,8 @@ int main() {
     float2 *out;
     out = (float2 *)malloc(profileSize*sizeof(float2));
 
-<<<<<<< HEAD
-    call_fast_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
-    //call_all_polarisation_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
-=======
     //call_fast_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
     call_all_polarisation_kernel(out,inSize,profileSize,phaseBinLookupSize,inSize2,nlag,in,iny,phaseBins,nPhaseBins,nchan,iblock,ichan,maxOccupancy,time,verbose);
->>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
 
     validate_results(nPhaseBins,nchan,nlag,out,exp,verbose);
 

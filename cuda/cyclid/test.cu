@@ -54,9 +54,35 @@ __global__ void cyclid_corr_accum_nlag_fast(float2 *in1, float2* in2, size_t siz
     } 
 }
 
+<<<<<<< HEAD
+__global__ void add_kernel(float2 *out,int2 *lookuptable)
+{
+    int tid=blockIdx.x*blockDim.x+threadIdx.x;
+    if(tid<16640)
+    {
+        for(int i=0;i<1003;i++)
+        {
+            out[tid].x+=lookuptable[(tid*1003)+i].x;
+            out[tid].y+=lookuptable[(tid*1003)+i].y;
+
+            out[tid].x+=lookuptable[(tid*1003)+i].x;
+            out[tid].y+=lookuptable[(tid*1003)+i].y;
+
+            out[tid].x+=lookuptable[(tid*1003)+i].x;
+            out[tid].y+=lookuptable[(tid*1003)+i].y;
+
+            out[tid].x+=lookuptable[(tid*1003)+i].x;
+            out[tid].y+=lookuptable[(tid*1003)+i].y;
+        }
+    }
+}
+
+__global__ void cyclid_corr_accum_all_pols(int2 *lookuptable,float2 *in1, float2* in2, size_t size1, size_t size2, float2* outXX, float2* outYY, float2 *outXY, float2 *outYX, unsigned *phaseBins, int numPhaseBins, int numPfbChans, int nlag , int iblock, int pfbChan, size_t outSz, int lookupBlockLen, bool verbose, int maxvar) {
+=======
 
 
 __global__ void cyclid_corr_accum_all_pols(float2 *in1, float2* in2, size_t size1, size_t size2, float2* outXX, float2* outYY, float2 *outXY, float2 *outYX, unsigned *phaseBins, int numPhaseBins, int numPfbChans, int nlag , int iblock, int pfbChan, size_t outSz, int lookupBlockLen, bool verbose) {
+>>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
 
     int inIdx = blockIdx.x * blockDim.x + threadIdx.x;
     int yIdx = blockIdx.y * blockDim.y + threadIdx.y;
@@ -66,6 +92,21 @@ __global__ void cyclid_corr_accum_all_pols(float2 *in1, float2* in2, size_t size
     int phaseBinIdx = (iblock * lookupBlockLen) + (2*inIdx) + yIdx;
     phaseBin = phaseBins[phaseBinIdx];
 
+<<<<<<< HEAD
+    int expIdx = (phaseBin * nlag * numPfbChans) + (nlag * pfbChan) + yIdx;
+    int index;
+    if(expIdx==0)
+    {
+        printf("%d\n",expIdx);
+    }
+    if ((inIdx<size2) && (expIdx<outSz) && (yIdx<nlag)) {
+        int j = inIdx+yIdx;
+        int i=inIdx;
+        index = i%1003;
+        // XX correlation
+        lookuptable[expIdx*1003 + index].x=i;
+        lookuptable[expIdx*1003 + index].y=j;       
+=======
     int outIdx = (phaseBin * nlag * numPfbChans) + (nlag * pfbChan) + yIdx;
     float2 tmp;
 
@@ -115,6 +156,7 @@ __global__ void cyclid_corr_accum_all_pols(float2 *in1, float2* in2, size_t size
 
         
 
+>>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
     } 
 }
 
@@ -176,11 +218,30 @@ void reference_code(float2 *in, float2 *exp, int inSize2, int nlag, int nchan, i
 }
 
 
+<<<<<<< HEAD
+void call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int phaseBinLookupSize,int inSize2,int nlag,float2 *in,float2 *iny,unsigned* phaseBins,int nPhaseBins,int nchan,int iblock,int ichan,bool maxOccupancy,bool time,bool verbose)
+{
+    int maxvar=0;
+    int2 *lookuptable;
+    lookuptable= (int2 *)malloc(16640*1003* sizeof(int2));
+    fflush(stdout);
+    for(int c=0;c<16640*1003;c++)
+    {
+        lookuptable[c].x=-1;
+    }
+    int2 *d_lookup;
+    printf("\n\nALL POLARISATION KERNEL\n\n");
+    float2 *in_gpu, *iny_gpu, *out_gpu, *outyy_gpu, *outxy_gpu, *outyx_gpu; 
+    unsigned *phaseBins_gpu;
+    cudaMalloc((void**)&d_lookup,16640*1003*sizeof(int2));
+    cudaMemcpy(d_lookup,lookuptable, 16640*1003*sizeof(int2), cudaMemcpyHostToDevice);
+=======
 void call_fast_kernel(float2* out,int inSize,int profileSize,int phaseBinLookupSize,int inSize2,int nlag,float2 *in,float2 *iny,unsigned* phaseBins,int nPhaseBins,int nchan,int iblock,int ichan,bool maxOccupancy,bool time,bool verbose)
 {
     printf("\n\nFAST KERNEL\n\n");
     float2 *in_gpu, *iny_gpu, *out_gpu, *outyy_gpu, *outxy_gpu, *outyx_gpu; 
     unsigned *phaseBins_gpu;
+>>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
     cudaMalloc((float2 **)&in_gpu, inSize*sizeof(float2));
     cudaMalloc((float2 **)&iny_gpu, inSize*sizeof(float2));
     cudaMalloc((float2 **)&out_gpu, profileSize*sizeof(float2));
@@ -245,6 +306,14 @@ void call_fast_kernel(float2* out,int inSize,int profileSize,int phaseBinLookupS
         checkCuda( cudaEventRecord(startEvent, 0) );
     }
 
+<<<<<<< HEAD
+    cyclid_corr_accum_all_pols<<<grids,threads>>>(d_lookup,in_gpu, iny_gpu, inSize, inSize2, out_gpu, outyy_gpu, outxy_gpu, outyx_gpu, phaseBins_gpu, nPhaseBins, nchan, nlag, iblock, ichan, profileSize, phaseBinLookupSize, verbose, maxvar);
+    
+    // dim3 threadsa(1024, 1, 1);
+    // dim3 gridsa((16640/1024)+1, 1, 1);
+
+    //add_kernel<<<gridsa,threadsa>>>(out_gpu,d_lookup);
+=======
     cyclid_corr_accum_nlag_fast<<<grids, threads>>>(in_gpu, in_gpu, inSize,  inSize2, out_gpu, nlag, phaseBins_gpu, ichan, nchan, iblock, nPhaseBins, verbose);
     
     if (time) {
@@ -337,6 +406,7 @@ void call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int pha
 
     cyclid_corr_accum_all_pols<<<grids,threads>>>(in_gpu, iny_gpu, inSize, inSize2, out_gpu, outyy_gpu, outxy_gpu, outyx_gpu, phaseBins_gpu, nPhaseBins, nchan, nlag, iblock, ichan, profileSize, phaseBinLookupSize, verbose);
     
+>>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
     if (time) {
         checkCuda( cudaEventRecord(stopEvent, 0) );
         checkCuda( cudaEventSynchronize(stopEvent) );
@@ -345,6 +415,10 @@ void call_all_polarisation_kernel(float2 *out,int inSize,int profileSize,int pha
     }
 
     cudaMemcpy(out, out_gpu, profileSize*sizeof(float2), cudaMemcpyDeviceToHost);
+<<<<<<< HEAD
+    printf("Max: %d\n",maxvar);
+=======
+>>>>>>> dbcd26cf1c03fa63e3b35a016d198ab11ca5e773
 
     cudaFree(in_gpu);
     cudaFree(iny_gpu);
